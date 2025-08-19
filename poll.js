@@ -1,3 +1,5 @@
+
+// worker/poll.js
 import admin from 'firebase-admin';
 import fetch from 'node-fetch';
 
@@ -177,3 +179,5 @@ setInterval(() => {
         console.error("[WORKER_FATAL] Unhandled error in processProcessingTasks loop:", err);
     });
 }, POLLING_INTERVAL_MS);
+
+
