@@ -1,20 +1,20 @@
-# Use an official Node.js runtime as a parent image
-FROM node:18-slim
+# Use the official lightweight Node.js 20 image.
+# https://hub.docker.com/_/node
+FROM node:20-slim
 
-# Set the working directory in the container
+# Create and change to the app directory.
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json (if available)
-COPY package.json ./
+# Copy application dependency manifests to the container image.
+# A wildcard is used to ensure both package.json AND package-lock.json are copied.
+# Copying this first prevents re-running npm install on every code change.
+COPY package*.json ./
 
-# Install any needed packages
-RUN npm install
+# Install production dependencies.
+RUN npm install --omit=dev
 
-# Copy the rest of the application's source code
+# Copy local code to the container image.
 COPY . .
 
-# Make port 8080 available to the world outside this container
-EXPOSE 8080
-
-# Run poll.js when the container launches
-CMD ["node", "poll.js"]
+# Run the web service on container startup.
+CMD [ "npm", "run", "worker" ]
