@@ -1,0 +1,17 @@
+{
+  "name": "eternal-kiss-worker",
+  "version": "1.0.0",
+  "description": "Worker to poll Pollo AI for video generation status.",
+  "main": "poll.js",
+  "type": "module",
+  "scripts": {
+    "start": "node poll.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase-admin": "^12.1.1",
+    "node-fetch": "^3.3.2"
+  }
+}
