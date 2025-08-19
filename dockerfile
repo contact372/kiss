@@ -1,19 +1,18 @@
-# Étape 1: Utiliser une image Node.js officielle et légère.
-# La version 18 est stable et recommandée.
+# 1. Base Image: Use a specific, lightweight Node.js version
 FROM node:18-slim
 
-# Définir le répertoire de travail à l'intérieur du conteneur.
+# 2. Set working directory
 WORKDIR /usr/src/app
 
-# Copier les fichiers package.json et package-lock.json (s'il existe).
-# Le "COPY" est optimisé pour utiliser le cache de Docker.
-COPY package*.json ./
+# 3. Copy package.json and package-lock.json (if available)
+# This leverages Docker's layer caching. These files don't change often.
+COPY worker/package.json ./
 
-# Installer les dépendances de l'application.
+# 4. Install dependencies
 RUN npm install
 
-# Copier le reste du code de l'application dans le répertoire de travail.
-COPY . .
+# 5. Copy the rest of your application's code
+COPY worker/poll.js ./
 
-# La commande qui sera exécutée lorsque le conteneur démarrera.
+# 6. Command to run the application
 CMD [ "node", "poll.js" ]
