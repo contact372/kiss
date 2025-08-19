@@ -1,18 +1,20 @@
-# 1. Base Image: Use a specific, lightweight Node.js version
+# Use an official Node.js runtime as a parent image
 FROM node:18-slim
 
-# 2. Set working directory
+# Set the working directory in the container
 WORKDIR /usr/src/app
 
-# 3. Copy package.json and package-lock.json (if available)
-# This leverages Docker's layer caching. These files don't change often.
-COPY worker/package.json ./
+# Copy package.json and package-lock.json (if available)
+COPY package.json ./
 
-# 4. Install dependencies
+# Install any needed packages
 RUN npm install
 
-# 5. Copy the rest of your application's code
-COPY worker/poll.js ./
+# Copy the rest of the application's source code
+COPY . .
 
-# 6. Command to run the application
-CMD [ "node", "poll.js" ]
+# Make port 8080 available to the world outside this container
+EXPOSE 8080
+
+# Run poll.js when the container launches
+CMD ["node", "poll.js"]
