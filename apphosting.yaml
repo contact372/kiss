@@ -1,8 +1,14 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
 
+# Specifies the build process for the backend
+build:
+  # Tells App Hosting to use Google Cloud Buildpacks to automatically build a container image
+  builder: google-cloud-buildpacks
 runConfig:
   # Increase this value to allow App Hosting to automatically spin up
   # more server instances in response to increased traffic.
   # This is crucial for handling thousands of users.
   maxInstances: 100
+# The command to run to start the server
+entrypoint: npm start
