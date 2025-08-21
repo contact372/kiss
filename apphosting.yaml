@@ -12,3 +12,4 @@ runConfig:
   maxInstances: 100
 # The command to run to start the server
 entrypoint: npm start
+
