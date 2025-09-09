@@ -21,7 +21,6 @@ ENV PORT=8080
 
 # Si tu utilises l'output "standalone"
 # COPY --from=builder /app/.next/standalone ./
-# COPY --from=builder /app/public ./public
 # COPY --from=builder /app/.next/static ./.next/static
 
 # Sinon (classique) : copie le minimum nécessaire
