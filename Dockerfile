@@ -25,7 +25,6 @@ ENV PORT=8080
 
 # Sinon (classique) : copie le minimum nécessaire
 COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
 COPY --from=builder /app/package*.json ./
 
 RUN npm ci --omit=dev
