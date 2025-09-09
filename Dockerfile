@@ -1,28 +1,36 @@
-# Étape 1: Utiliser une image Node.js officielle comme base.
-# On choisit la version 20, qui est une version stable et récente.
-FROM node:20-slim
-
-# Définir le répertoire de travail à l'intérieur du conteneur.
-# C'est ici que notre application va "vivre".
+# --- Build stage ---
+FROM node:20-slim AS builder
 WORKDIR /app
 
-# Copier les fichiers de dépendances en premier.
-# Cela permet à Docker de mettre en cache cette étape et d'accélérer les builds futurs
-# si les dépendances n'ont pas changé.
+# Installe les deps en cache-friendly
 COPY package*.json ./
+RUN npm ci
 
-# Installer les dépendances du projet.
-RUN npm install
-
-# Copier tout le reste du code de l'application.
+# Copie le reste et build
 COPY . .
-
-# Exposer le port que Next.js utilise par défaut.
-# Cloud Run saura qu'il doit écouter sur ce port.
-EXPOSE 3000
-
-# Construire l'application Next.js pour la production.
+# (Facultatif mais conseillé) sortie standalone pour prod
+# Assure-toi d'avoir:  experimental: { outputStandalone: true } ou output: 'standalone'
 RUN npm run build
 
-# La commande pour démarrer l'application quand le conteneur se lance.
-CMD ["npm", "start"]
+# --- Runtime stage ---
+FROM node:20-slim
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# Si tu utilises l'output "standalone"
+# COPY --from=builder /app/.next/standalone ./
+# COPY --from=builder /app/public ./public
+# COPY --from=builder /app/.next/static ./.next/static
+
+# Sinon (classique) : copie le minimum nécessaire
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package*.json ./
+
+RUN npm ci --omit=dev
+
+EXPOSE 8080
+# IMPORTANT : Next doit écouter $PORT et 0.0.0.0
+CMD ["sh","-c","npx next start -p ${PORT:-8080} -H 0.0.0.0"]
