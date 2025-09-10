@@ -1,10 +1,9 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getApiKey, decrementCreditsAction } from './actions';
+import { decrementCreditsAction, generateVideoServerSide } from './actions';
 import { Button } from '@/components/ui/button';
 import { Loader2, Wand2, ArrowLeft, Download } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
@@ -65,101 +64,18 @@ async function combineImages(image1DataUri: string, image2DataUri: string): Prom
     });
 }
 
-// Client-side polling function
-async function pollForVideo(taskId: string, apiKey: string): Promise<string> {
-    let attempts = 0;
-    const maxAttempts = 60; // Poll for up to 2 minutes (60 * 2s)
-    const interval = 2000; // 2 seconds
-
-    while (attempts < maxAttempts) {
-        try {
-            console.log(`[POLLO_CLIENT] Polling attempt ${attempts + 1}/${maxAttempts} for task: ${taskId}`);
-            const statusResponse = await fetch(`https://api.pollo.ai/v1/task/${taskId}`, {
-                method: 'GET',
-                headers: { 'x-api-key': apiKey },
-            });
-
-            if (!statusResponse.ok) {
-                throw new Error(`Polling failed with status: ${statusResponse.status}`);
-            }
-
-            const statusData = await statusResponse.json();
-            
-            if (statusData.status === 'completed') {
-                console.log('[POLLO_CLIENT] Task completed!', statusData);
-                return statusData.output.video_url;
-            } else if (statusData.status === 'failed') {
-                throw new Error('Video generation failed on Pollo.ai.');
-            }
-            // If status is 'processing' or 'pending', continue polling
-        } catch (error) {
-            console.error('[POLLO_CLIENT_ERROR] Polling error:', error);
-            throw error; // Propagate error to stop the process
-        }
-
-        await new Promise(resolve => setTimeout(resolve, interval));
-        attempts++;
-    }
-
-    throw new Error('Video generation timed out.');
-}
-
-async function generateVideoClientSide(combinedImageUri: string): Promise<string> {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error('API key is not available.');
-  }
-
-  try {
-    console.log('[POLLO_CLIENT] Starting task creation...');
-    const startResponse = await fetch('https://api.pollo.ai/v1/run/kling', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        prompt: 'make the two people in the image kiss passionately, 4k, cinematic, high quality',
-        image_url: combinedImageUri,
-        negative_prompt: 'ugly, disfigured, low quality, blurry',
-        fps: 24,
-        motion: 3,
-      }),
-    });
-
-    if (!startResponse.ok) {
-        const errorBody = await startResponse.text();
-        console.error('[POLLO_CLIENT_ERROR] Failed to start task:', errorBody);
-        throw new Error(`Failed to start video generation: ${startResponse.statusText}`);
-    }
-    
-    const startData = await startResponse.json();
-    const taskId = startData.task_id;
-
-    if (!taskId) {
-        throw new Error("Pollo.ai did not return a task ID.");
-    }
-    console.log(`[POLLO_CLIENT] Task created with ID: ${taskId}. Starting to poll.`);
-
-    return await pollForVideo(taskId, apiKey);
-
-  } catch (error) {
-    console.error('[POLLO_CLIENT_FATAL] Error in generateVideoClientSide:', error);
-    throw error;
-  }
-}
 
 function PageContent() {
   const { user, userProfile, loading: authLoading, refreshUserProfile } = useAuth();
-  const [image1, setImage1] = useState<string | null>(null);
-  const [image2, setImage2] = useState<string | null>(null);
-  const [appState, setAppState] = useState<AppState>('form');
-  const [loadingReason, setLoadingReason] = useState<LoadingReason>('generating');
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [isSubDialogOpen, setIsSubDialogOpen] = useState(false);
+  const [image1, setImage1] = React.useState<string | null>(null);
+  const [image2, setImage2] = React.useState<string | null>(null);
+  const [appState, setAppState] = React.useState<AppState>('form');
+  const [loadingReason, setLoadingReason] = React.useState<LoadingReason>('generating');
+  const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
+  const [progress, setProgress] = React.useState(0);
+  const [isSubDialogOpen, setIsSubDialogOpen] = React.useState(false);
   const { toast } = useToast();
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   
   const startLoadingAnimation = (reason: LoadingReason = 'generating', duration: number = 120000) => { // 2 minutes
     setLoadingReason(reason);
@@ -188,7 +104,7 @@ function PageContent() {
     }, updateInterval);
   };
   
-  const handleGenerationResult = useCallback(async (result: { videoUrl?: string; error?: string }) => {
+  const handleGenerationResult = React.useCallback(async (result: { videoUrl?: string; error?: string }) => {
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     setProgress(100);
 
@@ -210,7 +126,7 @@ function PageContent() {
     }
   }, [toast, refreshUserProfile, user]);
   
-  const startRealGeneration = useCallback(async () => {
+  const startRealGeneration = React.useCallback(async () => {
     if (!user) {
         toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to start generation.' });
         setIsSubDialogOpen(true);
@@ -232,8 +148,8 @@ function PageContent() {
 
     try {
         const combinedImageUri = await combineImages(image1, image2);
-        const generatedVideoUrl = await generateVideoClientSide(combinedImageUri);
-        await handleGenerationResult({ videoUrl: generatedVideoUrl });
+        const result = await generateVideoServerSide(combinedImageUri);
+        await handleGenerationResult(result);
     } catch (error) {
         const message = error instanceof Error ? error.message : "An unexpected error occurred.";
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
@@ -245,9 +161,9 @@ function PageContent() {
         });
     }
 
-  }, [user, userProfile, toast, handleGenerationResult, image1, image2]);
+  }, [user, userProfile, toast, handleGenerationResult, image1, image2, startLoadingAnimation]);
   
-  useEffect(() => {
+  React.useEffect(() => {
     return () => {
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
@@ -393,12 +309,12 @@ function PageContent() {
 
 export default function Home() {
     return (
-        <Suspense fallback={
+        <React.Suspense fallback={
             <div className="flex items-center justify-center h-screen">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
             </div>
         }>
             <PageContent />
-        </Suspense>
+        </React.Suspense>
     );
 }
