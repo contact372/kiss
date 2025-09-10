@@ -37,9 +37,16 @@ export default function SubscriptionDialog({ open, onOpenChange }: SubscriptionD
         checkoutUrl += `&email=${encodeURIComponent(user.email)}`;
     }
 
-    // Redirect to a dedicated payment status page. This page will then redirect to the home page.
-    // This ensures a clean, reliable flow.
-    const redirectUrl = `${window.location.origin}/payment-status`;
+    // Use the public URL from environment variables for the redirect.
+    // This fixes the issue where the internal development URL was used.
+    const publicUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!publicUrl) {
+        console.error('[FATAL] NEXT_PUBLIC_APP_URL is not set. Cannot redirect to payment.');
+        // You might want to show a toast or an alert to the user here.
+        return;
+    }
+
+    const redirectUrl = `${publicUrl}/payment-status`;
     checkoutUrl += `&redirect_url=${encodeURIComponent(redirectUrl)}`;
     
     console.log('[DEBUG] Redirecting to Whop checkout with URL:', checkoutUrl);
