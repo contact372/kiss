@@ -1,11 +1,97 @@
 
+
 'use server';
 
 import { decrementUserCreditsAdmin } from '@/lib/firebase/firebase-admin';
 
-// This action securely provides the API key from the server environment to the client.
-export async function getApiKey(): Promise<string | null> {
-    return process.env.POLLO_API_KEY || null;
+async function pollForVideo(taskId: string, apiKey: string): Promise<{ videoUrl?: string, error?: string }> {
+    let attempts = 0;
+    const maxAttempts = 60; // Poll for up to 2 minutes (60 * 2s)
+    const interval = 2000; // 2 seconds
+
+    while (attempts < maxAttempts) {
+        try {
+            console.log(`[POLLO_SERVER] Polling attempt ${attempts + 1}/${maxAttempts} for task: ${taskId}`);
+            const statusResponse = await fetch(`https://api.pollo.ai/v1/task/${taskId}`, {
+                method: 'GET',
+                headers: { 'x-api-key': apiKey },
+            });
+
+            if (!statusResponse.ok) {
+                const errorBody = await statusResponse.text();
+                console.error(`[POLLO_SERVER_ERROR] Polling failed with status ${statusResponse.status}:`, errorBody);
+                return { error: `Polling failed with status: ${statusResponse.status}` };
+            }
+
+            const statusData = await statusResponse.json();
+            
+            if (statusData.status === 'completed') {
+                console.log('[POLLO_SERVER] Task completed!', statusData);
+                return { videoUrl: statusData.output.video_url };
+            } else if (statusData.status === 'failed') {
+                 console.error('[POLLO_SERVER_ERROR] Video generation failed on Pollo.ai:', statusData);
+                return { error: 'Video generation failed on the provider.' };
+            }
+            // If status is 'processing' or 'pending', continue polling
+        } catch (error) {
+            console.error('[POLLO_SERVER_ERROR] Polling error:', error);
+            const message = error instanceof Error ? error.message : 'Unknown polling error';
+            return { error: message };
+        }
+
+        await new Promise(resolve => setTimeout(resolve, interval));
+        attempts++;
+    }
+
+    return { error: 'Video generation timed out.' };
+}
+
+export async function generateVideoServerSide(combinedImageUri: string): Promise<{ videoUrl?: string, error?: string }> {
+  const apiKey = process.env.POLLO_API_KEY;
+  if (!apiKey) {
+    console.error('[ACTION_ERROR] POLLO_API_KEY is not set in environment variables.');
+    return { error: 'API key is not configured on the server.' };
+  }
+
+  try {
+    console.log('[POLLO_SERVER] Starting task creation...');
+    const startResponse = await fetch('https://api.pollo.ai/v1/run/kling', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        prompt: 'make the two people in the image kiss passionately, 4k, cinematic, high quality',
+        image_url: combinedImageUri,
+        negative_prompt: 'ugly, disfigured, low quality, blurry',
+        fps: 24,
+        motion: 3,
+      }),
+    });
+
+    if (!startResponse.ok) {
+        const errorBody = await startResponse.text();
+        console.error('[POLLO_SERVER_ERROR] Failed to start task:', errorBody);
+        return { error: `Failed to start video generation: ${startResponse.statusText}` };
+    }
+    
+    const startData = await startResponse.json();
+    const taskId = startData.task_id;
+
+    if (!taskId) {
+        console.error('[POLLO_SERVER_ERROR] Pollo.ai did not return a task ID.');
+        return { error: "Video provider did not return a task ID." };
+    }
+    console.log(`[POLLO_SERVER] Task created with ID: ${taskId}. Starting to poll.`);
+
+    return await pollForVideo(taskId, apiKey);
+
+  } catch (error) {
+    console.error('[ACTION_FATAL] Error in generateVideoServerSide:', error);
+    const message = error instanceof Error ? error.message : "An unknown server error occurred.";
+    return { error: message };
+  }
 }
 
 export async function decrementCreditsAction(userId: string): Promise<{ success: boolean; error?: string }> {
@@ -18,3 +104,5 @@ export async function decrementCreditsAction(userId: string): Promise<{ success:
         return { success: false, error: message };
     }
 }
+
+    
