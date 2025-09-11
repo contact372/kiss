@@ -1,4 +1,3 @@
-
 import {
   Dialog,
   DialogContent,
@@ -38,16 +37,17 @@ export default function SubscriptionDialog({ open, onOpenChange }: SubscriptionD
     }
 
     // Use the public URL from environment variables for the redirect.
-    // This fixes the issue where the internal development URL was used.
+    // This is the CRITICAL fix to ensure the correct redirect on production.
     const publicUrl = process.env.NEXT_PUBLIC_APP_URL;
     if (!publicUrl) {
-        console.error('[FATAL] NEXT_PUBLIC_APP_URL is not set. Cannot redirect to payment.');
-        // You might want to show a toast or an alert to the user here.
-        return;
+        console.error('[FATAL] NEXT_PUBLIC_APP_URL is not set. Cannot build redirect URL for payment.');
+        // In a real app, you might want to show a toast or an alert to the user here.
+        // For now, we proceed without a redirect_url, which might cause issues but is better than crashing.
+    } else {
+        // We construct the correct redirect URL pointing to our /payment-status page.
+        const redirectUrl = `${publicUrl}/payment-status`;
+        checkoutUrl += `&redirect_url=${encodeURIComponent(redirectUrl)}`;
     }
-
-    const redirectUrl = `${publicUrl}/payment-status`;
-    checkoutUrl += `&redirect_url=${encodeURIComponent(redirectUrl)}`;
     
     console.log('[DEBUG] Redirecting to Whop checkout with URL:', checkoutUrl);
     
