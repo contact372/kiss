@@ -1,6 +1,4 @@
-
-// src/lib/firebase/firebase-admin.ts
-import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp, type ServiceAccount } from 'firebase-admin/app';
+import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp, type Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuth, type Auth as AdminAuth } from 'firebase-admin/auth';
 import type { UserProfile } from './types';
@@ -26,7 +24,7 @@ try {
         console.log('[FIREBASE_ADMIN_LOG] Reusing existing Firebase Admin SDK instance.');
     }
 
-    adminAuth = getAuth(adminApp);
+    adminAuth = getAdminAuth(adminApp);
     adminDb = getAdminFirestore(adminApp);
     console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore) obtained.');
 
