@@ -1,7 +1,10 @@
-import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp } from 'firebase-admin/app';
+
+// src/lib/firebase/firebase-admin.ts
+import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp, type ServiceAccount } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp, type Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuth, type Auth as AdminAuth } from 'firebase-admin/auth';
 import type { UserProfile } from './types';
+import { firebaseConfig } from './config';
 
 
 let adminApp: AdminApp;
@@ -11,16 +14,19 @@ let adminDb: AdminFirestore;
 console.log('[FIREBASE_ADMIN_LOG] Initializing Firebase Admin SDK...');
 try {
     if (getAdminApps().length === 0) {
-        // In Google Cloud environments (like Cloud Run), initialize without options.
-        // The SDK will automatically detect the project credentials.
-        adminApp = initializeAdminApp();
-        console.log('[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for the first time in a Google Cloud environment.');
+        // In Google Cloud environments (like Cloud Run), initialize without options,
+        // but specify the project ID to ensure it connects to the correct project.
+        // The SDK will automatically detect other credentials from the environment.
+        adminApp = initializeAdminApp({
+            projectId: firebaseConfig.projectId,
+        });
+        console.log(`[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
     } else {
         adminApp = getAdminApps()[0];
         console.log('[FIREBASE_ADMIN_LOG] Reusing existing Firebase Admin SDK instance.');
     }
 
-    adminAuth = getAdminAuth(adminApp);
+    adminAuth = getAuth(adminApp);
     adminDb = getAdminFirestore(adminApp);
     console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore) obtained.');
 
