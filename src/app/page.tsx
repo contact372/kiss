@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
@@ -96,7 +95,7 @@ function PageContent() {
     }, updateInterval);
   };
   
-  const handleGenerationResult = useCallback(async (result: { videoDataUri?: string; sourceImageDataUri?: string; error?: string }) => {
+  const handleGenerationResult = useCallback(async (result: { videoUrl?: string; sourceImageDataUri?: string; error?: string }) => {
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     setProgress(100);
 
@@ -108,8 +107,8 @@ function PageContent() {
             description: result.error,
             duration: 9000,
         });
-    } else if (result.videoDataUri && result.sourceImageDataUri) {
-        setVideoUrl(result.videoDataUri);
+    } else if (result.videoUrl && result.sourceImageDataUri) {
+        setVideoUrl(result.videoUrl);
         setSourceImageUrl(result.sourceImageDataUri);
         setAppState('result');
     }
@@ -129,14 +128,21 @@ function PageContent() {
     startLoadingAnimation('generating', 40000); 
     clearSessionState();
 
-    const actionInput: CreateKissVideoActionInput = {
-        userId: user.uid,
-        image1DataUri: finalImage1,
-        image2_data_uri: finalImage2,
-    };
-    
-    const result = await createKissVideoAction(actionInput);
-    await handleGenerationResult(result);
+    try {
+        const actionInput: CreateKissVideoActionInput = {
+            userId: user.uid,
+            image1DataUri: finalImage1,
+            image2_data_uri: finalImage2,
+        };
+        
+        const result = await createKissVideoAction(actionInput);
+        await handleGenerationResult(result);
+    } catch (error) {
+        // This is the improved error handling part
+        const errorMessage = error instanceof Error ? error.message : "An unknown client-side error occurred.";
+        console.error("Error calling createKissVideoAction:", error);
+        await handleGenerationResult({ error: errorMessage });
+    }
   }, [user, image1, image2, toast, handleGenerationResult, clearSessionState, startLoadingAnimation]);
 
   // Handles post-login teaser flow
@@ -187,7 +193,6 @@ function PageContent() {
             }
             
             // Step 2: Start real generation (this will start the progress bar)
-            // We now pass the loading reason to startRealGeneration
             const finalImage1 = restoredImage1 || image1;
             const finalImage2 = restoredImage2 || image2;
             
@@ -197,7 +202,7 @@ function PageContent() {
                 return;
             }
             
-            // Manually call the generation logic instead of startRealGeneration to keep the 'configuring' text
+            // Manually call the generation logic to control the flow
             startLoadingAnimation('configuring', 40000);
             clearSessionState();
         
