@@ -1,7 +1,10 @@
+
 'use server';
 
-import { decrementUserCreditsAdmin, checkUserSubscriptionAdmin } from '@/lib/firebase/firebase-admin';
+import { decrementUserCreditsAdmin } from '@/lib/firebase/firebase-admin';
 import { generateVideoServerSide } from './actions-pollo';
+import { admin } from '@/lib/firebase/firebase-admin';
+import type { UserProfile } from '@/lib/firebase/types';
 
 export interface CreateKissVideoActionInput {
     userId: string;
@@ -27,11 +30,15 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
 
     try {
         console.log(`[ACTION_LOG] Checking profile for user: ${userId}`);
-        const userProfile = await checkUserSubscriptionAdmin(userId);
-        if (!userProfile) {
+        const userRef = admin.db.doc(`users/${userId}`);
+        const docSnap = await userRef.get();
+
+        if (!docSnap.exists) {
             console.error(`[ACTION_ERROR] User profile not found for UID: ${userId}`);
             return { error: "User profile not found." };
         }
+        
+        const userProfile = docSnap.data() as UserProfile;
 
         console.log(`[ACTION_LOG] User profile found. Subscribed: ${userProfile.isSubscribed}, Credits: ${userProfile.credits}`);
         if (!userProfile.isSubscribed && userProfile.credits <= 0) {
