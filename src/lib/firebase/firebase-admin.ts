@@ -1,4 +1,5 @@
-import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp } from 'firebase-admin/app';
+// src/lib/firebase/firebase-admin.ts
+import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp, type ServiceAccount } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp, type Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuth, type Auth as AdminAuth } from 'firebase-admin/auth';
 import type { UserProfile } from './types';
@@ -12,9 +13,6 @@ let adminDb: AdminFirestore;
 console.log('[FIREBASE_ADMIN_LOG] Initializing Firebase Admin SDK...');
 try {
     if (getAdminApps().length === 0) {
-        // In Google Cloud environments (like Cloud Run), initialize without options,
-        // but specify the project ID to ensure it connects to the correct project.
-        // The SDK will automatically detect other credentials from the environment.
         adminApp = initializeAdminApp({
             projectId: firebaseConfig.projectId,
         });
@@ -30,7 +28,6 @@ try {
 
 } catch (e) {
     console.error('[FIREBASE_ADMIN_FATAL] Failed to initialize Firebase Admin SDK:', e);
-    // Rethrow or handle as appropriate for your application startup
     throw e;
 }
 
@@ -54,10 +51,10 @@ export async function activateUserSubscriptionAdmin(uid: string) {
     try {
         await adminDb.runTransaction(async (transaction) => {
             const userDoc = await transaction.get(userRef);
+            const userRecord = await adminAuth.getUser(uid);
             
-            if (!userDoc.exists()) {
+            if (!userDoc.exists) {
                 console.log(`[FIREBASE_ADMIN] User document for UID ${uid} does not exist. Creating new profile.`);
-                const userRecord = await adminAuth.getUser(uid);
                 const newProfileData: UserProfile = {
                     uid: uid,
                     email: userRecord.email || null,
@@ -119,55 +116,15 @@ export async function cancelUserSubscriptionAdmin(uid: string, endsAt: string, e
     await userRef.set(updateData, { merge: true });
 }
 
-
-export async function checkUserSubscriptionAdmin(uid: string): Promise<UserProfile | null> {
-  const userRef = adminDb.doc(`users/${uid}`);
-  const docSnap = await userRef.get();
-
-  if (docSnap.exists) {
-    const data = docSnap.data();
-    if (!data) return null;
-    
-    let isSubscribed = data.isSubscribed || false;
-    
-    if (data.subscriptionEndDate) {
-      const endDate = (data.subscriptionEndDate as any).toDate();
-      if (new Date() > endDate) {
-        isSubscribed = false;
-      }
-    }
-
-    const profile: UserProfile = {
-      uid: data.uid,
-      email: data.email,
-      credits: data.credits,
-      createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-      lastLogin: data.lastLogin?.toDate ? data.lastLogin.toDate().toISOString() : new Date().toISOString(),
-      subscriptionEndDate: data.subscriptionEndDate?.toDate ? data.subscriptionEndDate.toDate().toISOString() : null,
-      isSubscribed: isSubscribed,
-      creditsGranted: data.creditsGranted || false,
-    };
-
-    // If the database is out of sync, correct it.
-    if (data.isSubscribed && !isSubscribed) {
-        console.log(`[FIREBASE_ADMIN] Subscription for UID ${uid} has expired. Updating DB.`);
-        await userRef.update({ isSubscribed: false, creditsGranted: false });
-    }
-    
-    return profile;
-  } else {
-    console.log(`[FIREBASE_ADMIN] No user profile found for UID: ${uid}`);
-    return null;
-  }
-}
-
 export async function decrementUserCreditsAdmin(uid: string) {
-    const userRef = adminDb.doc(`users/${uid}`);
+    const userRef = admin.db.doc(`users/${uid}`);
     
-    const userProfile = await checkUserSubscriptionAdmin(uid);
-    if (!userProfile) {
+    // We get the user profile directly within this transaction for safety.
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
         throw new Error("User profile not found.");
     }
+    const userProfile = userDoc.data() as UserProfile;
 
     // Pro users should not have their credits decremented.
     if(userProfile.isSubscribed) {
