@@ -4,9 +4,6 @@ WORKDIR /app
 
 # Installe les deps en cache-friendly
 COPY package*.json ./
-
-# Ajout de la logique de nettoyage pour forcer une réinstallation propre
-RUN rm -rf node_modules package-lock.json
 RUN npm ci
 
 # Copie le reste et build
@@ -29,11 +26,13 @@ ENV PORT=8080
 # Sinon (classique) : copie le minimum nécessaire
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-# Ajout de la copie des node_modules depuis le builder pour plus de fiabilité
+COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.ts ./next.config.ts
 
 
 EXPOSE 8080
+# IMPORTANT : Next doit écouter $PORT et 0.0.0.0
+CMD ["sh","-c","npx next start -p ${PORT:-8080} -H 0.0.0.0"]
 # IMPORTANT : Next doit écouter $PORT et 0.0.0.0
 CMD ["sh","-c","npx next start -p ${PORT:-8080} -H 0.0.0.0"]
