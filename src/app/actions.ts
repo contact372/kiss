@@ -1,4 +1,3 @@
-
 'use server';
 
 import { decrementUserCreditsAdmin } from '@/lib/firebase/firebase-admin';
