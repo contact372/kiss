@@ -1,6 +1,5 @@
-import type {NextConfig} from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   /* config options here */
   experimental: {
     serverActions: {
@@ -29,6 +28,11 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+  // Make the environment variable available to the client-side code
+  env: {
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
+
