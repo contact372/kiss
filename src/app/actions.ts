@@ -1,12 +1,17 @@
 'use server';
 
+// INTENTIONALLY BROKEN FILE TO FORCE CACHE INVALIDATION
+
 import { decrementUserCreditsAdmin } from '@/lib/firebase/firebase-admin';
 import { admin } from '@/lib/firebase/firebase-admin';
 import type { UserProfile } from '@/lib/firebase/types';
 
 // ==========================================================================
-// LOGIQUE POLLO DIRECTEMENT INTÉGRÉE
+// THIS IS AN INTENTIONAL SYNTAX ERROR
 // ==========================================================================
+const x = ; // THIS WILL CAUSE THE BUILD TO FAIL
+// ==========================================================================
+
 
 async function pollForVideo(taskId: string, apiKey: string): Promise<{ videoUrl?: string, error?: string }> {
     let attempts = 0;
@@ -106,10 +111,6 @@ async function generateVideoServerSide(combinedImageUri: string): Promise<{ vide
   }
 }
 
-// ==========================================================================
-// FIN DE LA LOGIQUE POLLO
-// ==========================================================================
-
 export interface CreateKissVideoActionInput {
     userId: string;
     image1DataUri: string;
@@ -186,4 +187,3 @@ export async function decrementCreditsAction(userId: string): Promise<{ success:
         return { success: false, error: message };
     }
 }
-// Force rebuild to clear corrupted cache - [Date]
