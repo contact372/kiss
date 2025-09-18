@@ -8,11 +8,9 @@ RUN npm install -g npm@latest
 # Copier le manifeste des paquets ET le lockfile pour des builds reproductibles
 COPY package*.json ./
 
-# --- LA PURGE NUCLÉAIRE ---
-# En ne copiant PAS package-lock.json et en utilisant "npm install", 
-# nous forçons npm à résoudre l'arbre des dépendances à partir de zéro,
-# ce qui élimine les conflits et les corruptions.
-RUN npm install
+# Utiliser "npm ci" pour une installation propre et fiable, idéale pour les builds
+# C'est plus strict que "npm install" et évite les incohérences.
+RUN npm ci
 
 # Copier le reste du code source
 COPY . .
