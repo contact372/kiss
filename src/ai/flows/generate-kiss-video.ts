@@ -4,20 +4,8 @@
  * then generates a video from that fused image.
  */
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
-import { fuseFaces, FuseFacesInputSchema } from './fuse-faces';
-
-// The main input schema now takes the two original images
-export const GenerateKissVideoInputSchema = FuseFacesInputSchema; // Reuse the schema
-export type GenerateKissVideoInput = z.infer<typeof GenerateKissVideoInputSchema>;
-
-// The output schema remains the same, returning the final video
-export const GenerateKissVideoOutputSchema = z.object({
-  videoUri: z.string().optional().describe("The final generated video, as a data URI."),
-  sourceImageUri: z.string().optional().describe("The intermediate fused image, for debugging or display."),
-  error: z.string().optional(),
-});
-export type GenerateKissVideoOutput = z.infer<typeof GenerateKissVideoOutputSchema>;
+import { fuseFaces } from './fuse-faces';
+import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types'; // Import types
 
 /**
  * A two-step flow to generate a video:
@@ -41,7 +29,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
   console.log('[MAIN_FLOW] Step 2: Animating the fused image...');
   try {
     const { candidates } = await ai.generate({
-      model: 'googleai/veo-2', // Using the standard Veo model for video generation
+      model: 'googleai/veo-2',
       prompt: [
         { text: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.' },
         { media: { url: fusionResult.fusedImageUri } }
