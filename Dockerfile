@@ -5,8 +5,8 @@ WORKDIR /app
 # Mettre à jour npm pour la stabilité
 RUN npm install -g npm@latest
 
-# Copier le manifeste des paquets
-COPY package.json ./
+# Copier le manifeste des paquets ET le lockfile pour des builds reproductibles
+COPY package*.json ./
 
 # --- LA PURGE NUCLÉAIRE ---
 # En ne copiant PAS package-lock.json et en utilisant "npm install", 
@@ -31,12 +31,21 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# Copier uniquement les artefacts de build nécessaires depuis le builder
+# Créer un utilisateur non-root pour la sécurité
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copier les fichiers de l'application depuis l'étape de build
+COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
+COPY --from=builder /app/package.json ./package.json
 
+# Changer le propriétaire des fichiers pour l'utilisateur non-root
+USER nextjs
+
+# Exposer le port
 EXPOSE 8080
 
-# Démarrer le serveur Next.js
-CMD ["sh", "-c", "npx next start -p ${PORT:-8080} -H 0.0.0.0"]
+# Démarrer l'application
+CMD ["npm", "start"]
