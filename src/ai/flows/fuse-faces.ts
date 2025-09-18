@@ -3,21 +3,7 @@
  * @fileOverview A flow for fusing two faces into a single scene using an image generation model.
  */
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
-
-// Defines the input schema for the fuseFaces flow
-export const FuseFacesInputSchema = z.object({
-  image1Uri: z.string().describe("The first image, as a data URI."),
-  image2Uri: z.string().describe("The second image, as a data URI."),
-});
-export type FuseFacesInput = z.infer<typeof FuseFacesInputSchema>;
-
-// Defines the output schema for the fuseFaces flow
-export const FuseFacesOutputSchema = z.object({
-  fusedImageUri: z.string().optional().describe("The generated image with both faces, as a data URI."),
-  error: z.string().optional(),
-});
-export type FuseFacesOutput = z.infer<typeof FuseFacesOutputSchema>;
+import { FuseFacesInput, FuseFacesOutput } from './types'; // Import types
 
 /**
  * Takes two images, each with a face, and generates a new image
@@ -28,7 +14,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
 
   try {
     const { candidates } = await ai.generate({
-      model: 'googleai/imagen-2-latest', // Using Imagen 2 as requested
+      model: 'googleai/imagen-2-latest',
       prompt: [
         {
           text: `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. 
@@ -42,8 +28,10 @@ Most importantly, you must faithfully reproduce the facial features of each pers
       ],
       config: {
         // Additional configurations can be added here if needed
-        // For example, negative prompts, quality settings etc.
       },
+      output: {
+        format: 'uri', // Request a data URI directly
+      }
     });
 
     const firstCandidate = candidates[0];
