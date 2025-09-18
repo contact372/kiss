@@ -2,12 +2,13 @@
 
 import { admin, decrementUserCreditsAdmin } from '@/lib/firebase/firebase-admin';
 import type { UserProfile } from '@/lib/firebase/types';
-import { generateKissVideo } from '@/ai/flows/generate-kiss-video'; // Import the new Genkit flow
+import { generateKissVideo } from '@/ai/flows/generate-kiss-video'; // Import the Genkit flow
 
 /**
  * Defines the input for the user-facing server action.
+ * This is a type, not an exported object, so it's safe.
  */
-export interface CreateKissVideoActionInput {
+interface CreateKissVideoActionInput {
     userId: string;
     image1DataUri: string;
     image2_data_uri: string;
