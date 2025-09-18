@@ -28,7 +28,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
 
   try {
     const { candidates } = await ai.generate({
-      model: 'googleai/imagen-2', // Using Imagen 2 as requested
+      model: 'googleai/imagen-2-latest', // Using Imagen 2 as requested
       prompt: [
         {
           text: `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. 
