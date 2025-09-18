@@ -41,7 +41,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
   console.log('[MAIN_FLOW] Step 2: Animating the fused image...');
   try {
     const { candidates } = await ai.generate({
-      model: 'googleai/veo', // Using the standard Veo model for video generation
+      model: 'googleai/veo-2', // Using the standard Veo model for video generation
       prompt: [
         { text: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.' },
         { media: { url: fusionResult.fusedImageUri } }
