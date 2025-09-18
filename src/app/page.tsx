@@ -166,32 +166,50 @@ function PageContent() {
     if (!user || paid !== 'true') return;
 
     const handlePostPayment = async () => {
-        startLoadingAnimation('configuring', 8000);
+        // Set up the single loading screen immediately, but don't start the progress bar animation
+        setLoadingReason('configuring');
+        setAppState('loading');
+        setProgress(0);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         
         try {
             const { restoredImage1, restoredImage2 } = restoreStateFromSession();
+
+            // Step 1: Configure account in the background
             await grantPaidAccessClient(user.uid);
             await refreshUserProfile();
-            
             toast({ variant: 'default', title: 'Account Upgraded!', description: 'Your account is now active. Starting video generation...' });
-            
-            if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
             
             if (!restoredImage1 || !restoredImage2) {
                 toast({ title: 'Account Upgraded!', description: 'Please upload your images again to start.' });
                 setAppState('form');
-            } else {
-                startRealGeneration(restoredImage1, restoredImage2);
+                clearSessionState();
+                router.replace('/', { scroll: false });
+                return; // Exit if no images
             }
             
+            // Step 2: Start the progress bar animation and the real generation
+            // The text remains 'Finalising your account...' because loadingReason is still 'configuring'.
+            startLoadingAnimation('configuring', 40000); 
             clearSessionState();
+        
+            const actionInput: CreateKissVideoActionInput = {
+                userId: user.uid,
+                image1DataUri: restoredImage1,
+                image2_data_uri: restoredImage2,
+            };
+            
+            const result = await createKissVideoAction(actionInput);
+            await handleGenerationResult(result);
+
         } catch (error) {
             if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
             const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
-            console.error('[DEBUG] Failed to grant paid access:', message);
-            toast({ variant: 'destructive', title: 'Account Upgrade Failed', description: 'There was an issue upgrading your account. Please contact support.' });
+            console.error('[DEBUG] Failed during post-payment flow:', message);
+            toast({ variant: 'destructive', title: 'Flow Failed', description: 'There was an issue with your request. Please contact support.' });
             setAppState('form');
         } finally {
+            // Clean up URL query param
             router.replace('/', { scroll: false });
         }
     };
@@ -450,4 +468,3 @@ export default function Home() {
         </Suspense>
     );
 }
-
