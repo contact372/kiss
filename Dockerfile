@@ -1,21 +1,26 @@
-# Étape 1: Builder - Installe les dépendances et construit l'application
+# Étape 1: Builder - Construit l'application avec des dépendances propres
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# Copier les fichiers de manifeste de paquets
-COPY package*.json ./
+# Mettre à jour npm pour la stabilité
+RUN npm install -g npm@latest
 
-# Installer TOUTES les dépendances (y compris devDependencies pour le build)
-RUN npm ci
+# Copier le manifeste des paquets
+COPY package.json ./
+
+# --- LA PURGE NUCLÉAIRE ---
+# En ne copiant PAS package-lock.json et en utilisant "npm install", 
+# nous forçons npm à résoudre l'arbre des dépendances à partir de zéro,
+# ce qui élimine les conflits et les corruptions.
+RUN npm install
 
 # Copier le reste du code source
 COPY . .
 
-# Lancer le build de l'application Next.js
+# Construire l'application Next.js
 RUN NEXT_TELEMETRY_DISABLED=1 npm run build
 
-# --- NOUVELLE ÉTAPE CRUCIALE ---
-# Supprimer les dépendances de développement pour assainir node_modules
+# Supprimer les dépendances de développement pour l'image finale
 RUN npm prune --production
 
 # Étape 2: Runner - Exécute l'application de production
@@ -26,12 +31,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# Copier les artefacts de build DEPUIS L'ÉTAPE BUILDER
+# Copier uniquement les artefacts de build nécessaires depuis le builder
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/package.json ./
 
 EXPOSE 8080
 
-# La commande pour démarrer l'application
+# Démarrer le serveur Next.js
 CMD ["sh", "-c", "npx next start -p ${PORT:-8080} -H 0.0.0.0"]
