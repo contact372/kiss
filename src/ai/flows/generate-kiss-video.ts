@@ -1,87 +1,78 @@
-
 'use server';
 /**
- * @fileOverview A flow for generating a video of two people kissing from a single combined image.
- *
- * - generateKissVideo - The main function to generate the video.
- * - GenerateKissVideoInput - The input type for the flow.
- * - GenerateKissVideoOutput - The return type for the flow.
+ * @fileOverview A multi-step flow that first fuses two images into one, 
+ * then generates a video from that fused image.
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as fs from 'fs';
-import { Readable } from 'stream';
+import { fuseFaces, FuseFacesInputSchema } from './fuse-faces';
 
-const GenerateKissVideoInputSchema = z.object({
-  combinedImageUri: z.string().describe("A single combined image of two people, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."),
-});
+// The main input schema now takes the two original images
+export const GenerateKissVideoInputSchema = FuseFacesInputSchema; // Reuse the schema
 export type GenerateKissVideoInput = z.infer<typeof GenerateKissVideoInputSchema>;
 
-const GenerateKissVideoOutputSchema = z.object({
-  videoUrl: z.string().optional(),
+// The output schema remains the same, returning the final video
+export const GenerateKissVideoOutputSchema = z.object({
+  videoUri: z.string().optional().describe("The final generated video, as a data URI."),
+  sourceImageUri: z.string().optional().describe("The intermediate fused image, for debugging or display."),
   error: z.string().optional(),
 });
 export type GenerateKissVideoOutput = z.infer<typeof GenerateKissVideoOutputSchema>;
 
+/**
+ * A two-step flow to generate a video:
+ * 1. Fuse two separate images into a single, coherent scene.
+ * 2. Animate that new scene to create a video.
+ */
 export async function generateKissVideo(input: GenerateKissVideoInput): Promise<GenerateKissVideoOutput> {
-  console.log('[VEO_FLOW] Starting video generation process...');
+  console.log('[MAIN_FLOW] Starting two-step video generation process...');
+
+  // STEP 1: Fuse the two images into a single scene
+  console.log('[MAIN_FLOW] Step 1: Fusing faces...');
+  const fusionResult = await fuseFaces(input);
+
+  if (fusionResult.error || !fusionResult.fusedImageUri) {
+    console.error('[MAIN_FLOW_ERROR] Step 1 failed:', fusionResult.error);
+    return { error: `Failed during image fusion step: ${fusionResult.error}` };
+  }
+  console.log('[MAIN_FLOW] Step 1 successful. Fused image created.');
+
+  // STEP 2: Generate a video from the newly created scene
+  console.log('[MAIN_FLOW] Step 2: Animating the fused image...');
   try {
-    let { operation } = await ai.generate({
-      model: 'googleai/veo-2.0-generate-001',
+    const { candidates } = await ai.generate({
+      model: 'googleai/veo', // Using the standard Veo model for video generation
       prompt: [
-          { text: 'make the two people in the image kiss passionately, 4k, cinematic, high quality' },
-          { media: { url: input.combinedImageUri } }
+        { text: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.' },
+        { media: { url: fusionResult.fusedImageUri } }
       ],
       config: {
         durationSeconds: 5,
         aspectRatio: '16:9',
       },
+      output: {
+        format: 'uri', // Ask Genkit to return a data URI directly
+      }
     });
 
-    if (!operation) {
-      console.error('[VEO_FLOW_ERROR] The model did not return an operation.');
-      return { error: 'Video generation failed to start.' };
-    }
-    console.log('[VEO_FLOW] Operation started. Polling for completion...');
+    const videoCandidate = candidates[0];
 
-    // Poll for completion
-    while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-      console.log('[VEO_FLOW] Checking operation status...');
-      operation = await ai.checkOperation(operation);
+    if (!videoCandidate || !videoCandidate.media) {
+      console.error('[MAIN_FLOW_ERROR] Step 2 failed: Veo did not return a valid video candidate.');
+      return { error: 'Video animation failed to produce a result.' };
     }
 
-    if (operation.error) {
-      console.error('[VEO_FLOW_ERROR] Operation failed:', operation.error.message);
-      return { error: `Video generation failed: ${operation.error.message}` };
-    }
+    console.log('[MAIN_FLOW] Step 2 successful. Video generated.');
+    return {
+      videoUri: videoCandidate.media.url,
+      sourceImageUri: fusionResult.fusedImageUri, // Pass the fused image back to the client
+    };
 
-    const videoPart = operation.output?.message?.content.find((p) => !!p.media);
-    if (!videoPart || !videoPart.media) {
-      console.error('[VEO_FLOW_ERROR] No video media found in the completed operation.');
-      return { error: 'Failed to find the generated video in the result.' };
-    }
-    
-    console.log('[VEO_FLOW] Video generation complete. Converting to data URI...');
-
-    // The URL from Veo is temporary and needs the API key to be downloaded.
-    // We download it on the server and convert to a data URI to send to the client.
-    const fetch = (await import('node-fetch')).default;
-    const videoDownloadUrl = `${videoPart.media.url}&key=${process.env.GEMINI_API_KEY}`;
-    
-    const response = await fetch(videoDownloadUrl);
-    if (!response.ok) {
-        throw new Error(`Failed to download video file: ${response.statusText}`);
-    }
-    const videoBuffer = await response.buffer();
-    const videoDataUri = `data:video/mp4;base64,${videoBuffer.toString('base64')}`;
-    
-    console.log('[VEO_FLOW] Successfully created data URI.');
-    return { videoUrl: videoDataUri };
-
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'An unknown error occurred during video generation.';
-    console.error('[VEO_FLOW_FATAL]', message, e);
-    return { error: message };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+    console.error(`[MAIN_FLOW_ERROR] An error occurred during video animation: ${errorMessage}`);
+    return {
+      error: `Failed to animate the image: ${errorMessage}`,
+    };
   }
 }
