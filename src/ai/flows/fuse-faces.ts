@@ -3,7 +3,7 @@
  * @fileOverview A flow for fusing two faces into a single scene using a specialized image generation model.
  * This implementation uses the @google/genai SDK directly to access models capable of image output.
  */
-import { GoogleGenerativeAI } from '@google/genai';
+import { GoogleAI } from '@google/genai'; // Corrected import
 import { FuseFacesInput, FuseFacesOutput } from './types'; // Import types
 
 // --- Helper function to fetch a URL and convert it to a GenerativePart --- 
@@ -33,14 +33,12 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+    const genAI = new GoogleAI(process.env.GOOGLE_API_KEY); // Corrected class name
     
     // Using a model known for image generation capabilities.
-    // Note: Model names can change. 'gemini-1.5-flash-preview-0514' is a specific, stable version.
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-preview-0514' });
 
     console.log('[FUSE_FACES_FLOW] Fetching and converting images to inline data...');
-    // Assuming PNG format for simplicity. In a real app, you might need to determine this dynamically.
     const image1Part = await urlToGenerativePart(input.image1Uri, 'image/png');
     const image2Part = await urlToGenerativePart(input.image2Uri, 'image/png');
 
@@ -50,20 +48,16 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const result = await model.generateContent([prompt, image1Part, image2Part]);
     const response = result.response;
 
-    // The response for this model doesn't directly return a media object.
-    // The generated image is typically embedded in the text content or a specific field.
-    // We need to carefully inspect the response to find the image data.
     console.log('[FUSE_FACES_FLOW_DEBUG] Full generation response:', JSON.stringify(response, null, 2));
     
-    // This part is speculative based on expected model output. 
-    // It may need adjustment based on the actual response structure.
     const firstCandidate = response.candidates?.[0];
+    // Find the part that contains the generated image data
     const imagePart = firstCandidate?.content?.parts.find(p => p.hasOwnProperty('inlineData'));
 
     if (!imagePart || !('inlineData' in imagePart)) {
       const errorMsg = 'The model did not return a valid image candidate in the response.';
       console.error(`[FUSE_FACES_FLOW_ERROR] ${errorMsg}`);
-      console.error(`[FUSE_FACES_FLOW_ERROR] Text response from model: ${response.text()}`);
+      console.error(`[FUSE_FACES_FLOW_ERROR] Text response from model (if any): ${response.text()}`);
       return { error: errorMsg };
     }
 
