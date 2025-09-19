@@ -95,7 +95,7 @@ function PageContent() {
     }, updateInterval);
   };
   
-  const handleGenerationResult = useCallback(async (result: { videoUrl?: string; sourceImageDataUri?: string; error?: string }) => {
+  const handleGenerationResult = useCallback(async (result: { videoDataUri?: string; sourceImageDataUri?: string; error?: string }) => {
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     setProgress(100);
 
@@ -107,8 +107,8 @@ function PageContent() {
             description: result.error,
             duration: 9000,
         });
-    } else if (result.videoUrl && result.sourceImageDataUri) {
-        setVideoUrl(result.videoUrl);
+    } else if (result.videoDataUri && result.sourceImageDataUri) {
+        setVideoUrl(result.videoDataUri);
         setSourceImageUrl(result.sourceImageDataUri);
         setAppState('result');
     }
@@ -128,21 +128,15 @@ function PageContent() {
     startLoadingAnimation('generating', 40000); 
     clearSessionState();
 
-    try {
-        const actionInput: CreateKissVideoActionInput = {
-            userId: user.uid,
-            image1DataUri: finalImage1,
-            image2_data_uri: finalImage2,
-        };
-        
-        const result = await createKissVideoAction(actionInput);
-        await handleGenerationResult(result);
-    } catch (error) {
-        // This is the improved error handling part
-        const errorMessage = error instanceof Error ? error.message : "An unknown client-side error occurred.";
-        console.error("Error calling createKissVideoAction:", error);
-        await handleGenerationResult({ error: errorMessage });
-    }
+    const actionInput: CreateKissVideoActionInput = {
+        userId: user.uid,
+        image1DataUri: finalImage1,
+        image2_data_uri: finalImage2,
+    };
+
+    const result = await createKissVideoAction(actionInput);
+    await handleGenerationResult(result);
+
   }, [user, image1, image2, toast, handleGenerationResult, clearSessionState, startLoadingAnimation]);
 
   // Handles post-login teaser flow
@@ -172,7 +166,7 @@ function PageContent() {
     if (!user || paid !== 'true') return;
 
     const handlePostPayment = async () => {
-        // Set up the single loading screen immediately
+        // Set up the single loading screen immediately, but don't start the progress bar animation
         setLoadingReason('configuring');
         setAppState('loading');
         setProgress(0);
@@ -181,7 +175,7 @@ function PageContent() {
         try {
             const { restoredImage1, restoredImage2 } = restoreStateFromSession();
 
-            // Step 1: Configure account (no progress bar movement)
+            // Step 1: Configure account in the background
             await grantPaidAccessClient(user.uid);
             await refreshUserProfile();
             toast({ variant: 'default', title: 'Account Upgraded!', description: 'Your account is now active. Starting video generation...' });
@@ -189,27 +183,20 @@ function PageContent() {
             if (!restoredImage1 || !restoredImage2) {
                 toast({ title: 'Account Upgraded!', description: 'Please upload your images again to start.' });
                 setAppState('form');
+                clearSessionState();
+                router.replace('/', { scroll: false });
                 return; // Exit if no images
             }
             
-            // Step 2: Start real generation (this will start the progress bar)
-            const finalImage1 = restoredImage1 || image1;
-            const finalImage2 = restoredImage2 || image2;
-            
-            if (!finalImage1 || !finalImage2) {
-                toast({ variant: 'destructive', title: 'Error', description: 'Missing required data to start generation.' });
-                setAppState('form');
-                return;
-            }
-            
-            // Manually call the generation logic to control the flow
-            startLoadingAnimation('configuring', 40000);
+            // Step 2: Start the progress bar animation and the real generation
+            // The text remains 'Finalising your account...' because loadingReason is still 'configuring'.
+            startLoadingAnimation('configuring', 40000); 
             clearSessionState();
         
             const actionInput: CreateKissVideoActionInput = {
                 userId: user.uid,
-                image1DataUri: finalImage1,
-                image2_data_uri: finalImage2,
+                image1DataUri: restoredImage1,
+                image2_data_uri: restoredImage2,
             };
             
             const result = await createKissVideoAction(actionInput);
@@ -222,6 +209,7 @@ function PageContent() {
             toast({ variant: 'destructive', title: 'Flow Failed', description: 'There was an issue with your request. Please contact support.' });
             setAppState('form');
         } finally {
+            // Clean up URL query param
             router.replace('/', { scroll: false });
         }
     };
@@ -480,4 +468,3 @@ export default function Home() {
         </Suspense>
     );
 }
-

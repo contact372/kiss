@@ -1,34 +1,42 @@
+# Étape 1: Builder - Construit l'application avec des dépendances propres
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# Installe les deps en cache-friendly
-COPY package*.json ./
-RUN npm ci
+# Mettre à jour npm pour la stabilité
+RUN npm install -g npm@latest
 
-# Crée un dossier public vide pour éviter les erreurs de copie s'il n'existe pas.
-RUN mkdir public
+# Copier le manifeste des paquets
+COPY package.json ./
 
-# Copie le reste et build
+# --- LA PURGE NUCLÉAIRE ---
+# En ne copiant PAS package-lock.json et en utilisant "npm install", 
+# nous forçons npm à résoudre l'arbre des dépendances à partir de zéro,
+# ce qui élimine les conflits et les corruptions.
+RUN npm install
+
+# Copier le reste du code source
 COPY . .
-RUN npm run build
 
-# --- Runtime stage ---
+# Construire l'application Next.js
+RUN NEXT_TELEMETRY_DISABLED=1 npm run build
+
+# Supprimer les dépendances de développement pour l'image finale
+RUN npm prune --production
+
+# Étape 2: Runner - Exécute l'application de production
 FROM node:20-slim
 WORKDIR /app
 
+# Définir l'environnement de production
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# Copie le minimum nécessaire depuis l'étape de construction
+# Copier uniquement les artefacts de build nécessaires depuis le builder
 COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/package.json ./
 
 EXPOSE 8080
-# IMPORTANT : Next doit écouter $PORT et 0.0.0.0
-CMD ["sh","-c","npx next start -p ${PORT:-8080} -H 0.0.0.0"]
 
-CMD ["sh","-c","npx next start -p ${PORT:-8080} -H 0.0.0.0"]
-# IMPORTANT : Next doit écouter $PORT et 0.0.0.0
-CMD ["sh","-c","npx next start -p ${PORT:-8080} -H 0.0.0.0"]
+# Démarrer le serveur Next.js
+CMD ["sh", "-c", "npx next start -p ${PORT:-8080} -H 0.0.0.0"]

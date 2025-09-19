@@ -572,7 +572,7 @@ async function grantPaidAccessClient(uid) {
         });
         console.log(`[CLIENT_DB] Successfully granted paid access to UID: ${uid}`);
     } catch (error) {
-        console.error(`[CLIENT_DB_ERROR] Failed to grant paid access for UID: ${uid}`, error);
+        console.error("[CLIENT_DB_ERROR] Failed to grant paid access for UID: ${uid}", error);
         throw new Error("Failed to update account. Please contact support.");
     }
 }

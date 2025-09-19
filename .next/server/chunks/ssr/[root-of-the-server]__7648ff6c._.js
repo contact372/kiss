@@ -61,7 +61,6 @@ __turbopack_context__.s({
     "activateUserSubscriptionAdmin": (()=>activateUserSubscriptionAdmin),
     "admin": (()=>admin),
     "cancelUserSubscriptionAdmin": (()=>cancelUserSubscriptionAdmin),
-    "checkUserSubscriptionAdmin": (()=>checkUserSubscriptionAdmin),
     "decrementUserCreditsAdmin": (()=>decrementUserCreditsAdmin)
 });
 var __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$app__$5b$external$5d$__$28$firebase$2d$admin$2f$app$2c$__esm_import$29$__ = __turbopack_context__.i("[externals]/firebase-admin/app [external] (firebase-admin/app, esm_import)");
@@ -81,24 +80,23 @@ var __turbopack_async_dependencies__ = __turbopack_handle_async_dependencies__([
 let adminApp;
 let adminAuth;
 let adminDb;
-console.log('[FIREBASE_ADMIN_LOG] Initializing Firebase Admin SDK...');
+console.log('[FIREBASE_ADMIN_LOG] Attempting to initialize Firebase Admin SDK...');
 try {
     if ((0, __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$app__$5b$external$5d$__$28$firebase$2d$admin$2f$app$2c$__esm_import$29$__["getApps"])().length === 0) {
         adminApp = (0, __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$app__$5b$external$5d$__$28$firebase$2d$admin$2f$app$2c$__esm_import$29$__["initializeApp"])({
             projectId: __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2f$config$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["firebaseConfig"].projectId
         });
-        console.log('[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for the first time.');
+        console.log(`[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for project: ${__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2f$config$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["firebaseConfig"].projectId}`);
     } else {
         adminApp = (0, __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$app__$5b$external$5d$__$28$firebase$2d$admin$2f$app$2c$__esm_import$29$__["getApps"])()[0];
         console.log('[FIREBASE_ADMIN_LOG] Reusing existing Firebase Admin SDK instance.');
     }
     adminAuth = (0, __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$auth__$5b$external$5d$__$28$firebase$2d$admin$2f$auth$2c$__esm_import$29$__["getAuth"])(adminApp);
     adminDb = (0, __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$firestore__$5b$external$5d$__$28$firebase$2d$admin$2f$firestore$2c$__esm_import$29$__["getFirestore"])(adminApp);
-    console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore) obtained.');
+    console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore) obtained successfully.');
 } catch (e) {
-    console.error('[FIREBASE_ADMIN_FATAL] Failed to initialize Firebase Admin SDK:', e);
-    // Rethrow or handle as appropriate for your application startup
-    throw e;
+    console.error('[FIREBASE_ADMIN_FATAL] CRITICAL: Failed to initialize Firebase Admin SDK. This will cause all server-side Firebase operations to fail.', e);
+// We don't throw here to allow the server to start, but errors will occur.
 }
 const admin = {
     auth: adminAuth,
@@ -115,12 +113,12 @@ async function activateUserSubscriptionAdmin(uid) {
     try {
         await adminDb.runTransaction(async (transaction)=>{
             const userDoc = await transaction.get(userRef);
-            if (!userDoc.exists()) {
+            // It's safer to get user email from the client or another trusted source if needed.
+            // For now, we assume the user profile might be new.
+            if (!userDoc.exists) {
                 console.log(`[FIREBASE_ADMIN] User document for UID ${uid} does not exist. Creating new profile.`);
-                const userRecord = await adminAuth.getUser(uid);
                 const newProfileData = {
                     uid: uid,
-                    email: userRecord.email || null,
                     createdAt: __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$firestore__$5b$external$5d$__$28$firebase$2d$admin$2f$firestore$2c$__esm_import$29$__["FieldValue"].serverTimestamp(),
                     lastLogin: __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$firestore__$5b$external$5d$__$28$firebase$2d$admin$2f$firestore$2c$__esm_import$29$__["FieldValue"].serverTimestamp(),
                     isSubscribed: true,
@@ -172,60 +170,35 @@ async function cancelUserSubscriptionAdmin(uid, endsAt, ended) {
         merge: true
     });
 }
-async function checkUserSubscriptionAdmin(uid) {
-    const userRef = adminDb.doc(`users/${uid}`);
-    const docSnap = await userRef.get();
-    if (docSnap.exists) {
-        const data = docSnap.data();
-        if (!data) return null;
-        let isSubscribed = data.isSubscribed || false;
-        if (data.subscriptionEndDate) {
-            const endDate = data.subscriptionEndDate.toDate();
-            if (new Date() > endDate) {
-                isSubscribed = false;
-            }
-        }
-        const profile = {
-            uid: data.uid,
-            email: data.email,
-            credits: data.credits,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-            lastLogin: data.lastLogin?.toDate ? data.lastLogin.toDate().toISOString() : new Date().toISOString(),
-            subscriptionEndDate: data.subscriptionEndDate?.toDate ? data.subscriptionEndDate.toDate().toISOString() : null,
-            isSubscribed: isSubscribed,
-            creditsGranted: data.creditsGranted || false
-        };
-        // If the database is out of sync, correct it.
-        if (data.isSubscribed && !isSubscribed) {
-            console.log(`[FIREBASE_ADMIN] Subscription for UID ${uid} has expired. Updating DB.`);
-            await userRef.update({
-                isSubscribed: false,
-                creditsGranted: false
-            });
-        }
-        return profile;
-    } else {
-        console.log(`[FIREBASE_ADMIN] No user profile found for UID: ${uid}`);
-        return null;
-    }
-}
 async function decrementUserCreditsAdmin(uid) {
-    const userRef = adminDb.doc(`users/${uid}`);
-    const userProfile = await checkUserSubscriptionAdmin(uid);
-    if (!userProfile) {
-        throw new Error("User profile not found.");
+    if (!uid) {
+        console.error("[FIREBASE_ADMIN_ERROR] decrementUserCreditsAdmin called without UID.");
+        throw new Error("User ID is required to decrement credits.");
     }
-    // Pro users should not have their credits decremented.
-    if (userProfile.isSubscribed) {
-        console.log('[FIREBASE_ADMIN] Pro user generating. No credits decremented.');
-        return;
+    const userRef = admin.db.doc(`users/${uid}`);
+    try {
+        await admin.db.runTransaction(async (transaction)=>{
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists) {
+                throw new Error(`User profile not found for UID: ${uid}`);
+            }
+            const userProfile = userDoc.data();
+            if (userProfile.isSubscribed) {
+                console.log(`[FIREBASE_ADMIN] Pro user ${uid} generating. No credits decremented.`);
+                return;
+            }
+            if (userProfile.credits <= 0) {
+                throw new Error("User has no credits to decrement.");
+            }
+            transaction.update(userRef, {
+                credits: __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$firestore__$5b$external$5d$__$28$firebase$2d$admin$2f$firestore$2c$__esm_import$29$__["FieldValue"].increment(-1)
+            });
+            console.log(`[FIREBASE_ADMIN] Decremented credits for user ${uid}.`);
+        });
+    } catch (error) {
+        console.error(`[FIREBASE_ADMIN_FATAL] Transaction failed for decrementing credits for UID ${uid}:`, error);
+        throw error; // Re-throw the error to be caught by the calling action.
     }
-    if (userProfile.credits <= 0) {
-        throw new Error("User has no credits to decrement.");
-    }
-    await userRef.update({
-        credits: __TURBOPACK__imported__module__$5b$externals$5d2f$firebase$2d$admin$2f$firestore__$5b$external$5d$__$28$firebase$2d$admin$2f$firestore$2c$__esm_import$29$__["FieldValue"].increment(-1)
-    });
 }
 __turbopack_async_result__();
 } catch(e) { __turbopack_async_result__(e); } }, false);}),
@@ -234,9 +207,9 @@ __turbopack_async_result__();
 
 var { g: global, __dirname, a: __turbopack_async_module__ } = __turbopack_context__;
 __turbopack_async_module__(async (__turbopack_handle_async_dependencies__, __turbopack_async_result__) => { try {
-/* __next_internal_action_entry_do_not_use__ [{"004260e38abab04186f914776b6aae2965d6716645":"getApiKey","40a0dafb7bfb45ab9ee8bfbe36bcc69748606eca00":"decrementCreditsAction"},"",""] */ __turbopack_context__.s({
-    "decrementCreditsAction": (()=>decrementCreditsAction),
-    "getApiKey": (()=>getApiKey)
+/* __next_internal_action_entry_do_not_use__ [{"4002e87bb34cf261a69802841988a10a259b719e84":"createKissVideoAction","40a0dafb7bfb45ab9ee8bfbe36bcc69748606eca00":"decrementCreditsAction"},"",""] */ __turbopack_context__.s({
+    "createKissVideoAction": (()=>createKissVideoAction),
+    "decrementCreditsAction": (()=>decrementCreditsAction)
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/build/webpack/loaders/next-flight-loader/server-reference.js [app-rsc] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$app$2d$render$2f$encryption$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/app-render/encryption.js [app-rsc] (ecmascript)");
@@ -249,8 +222,176 @@ var __turbopack_async_dependencies__ = __turbopack_handle_async_dependencies__([
 ;
 ;
 ;
-async function getApiKey() {
-    return process.env.POLLO_API_KEY || null;
+;
+// ==========================================================================
+// LOGIQUE POLLO DIRECTEMENT INTÉGRÉE
+// ==========================================================================
+async function pollForVideo(taskId, apiKey) {
+    let attempts = 0;
+    const maxAttempts = 90;
+    const interval = 2000;
+    console.log(`[POLLO_POLL_START] Starting polling for task ID: ${taskId}`);
+    while(attempts < maxAttempts){
+        try {
+            console.log(`[POLLO_POLL_ATTEMPT] Polling attempt ${attempts + 1}/${maxAttempts} for task: ${taskId}`);
+            const statusResponse = await fetch(`https://pollo.ai/api/platform/task/${taskId}`, {
+                method: 'GET',
+                headers: {
+                    'x-api-key': apiKey
+                }
+            });
+            if (!statusResponse.ok) {
+                const errorBody = await statusResponse.text();
+                console.error(`[POLLO_POLL_ERROR] Polling failed with status ${statusResponse.status}:`, errorBody);
+                return {
+                    error: `Polling failed with status: ${statusResponse.status}`
+                };
+            }
+            const statusData = await statusResponse.json();
+            if (statusData.status === 'completed') {
+                console.log('[POLLO_POLL_SUCCESS] Task completed!', statusData);
+                return {
+                    videoUrl: statusData.output.video_url
+                };
+            } else if (statusData.status === 'failed') {
+                console.error('[POLLO_POLL_ERROR] Video generation failed on Pollo.ai:', statusData);
+                return {
+                    error: 'Video generation failed on the provider.'
+                };
+            }
+            console.log(`[POLLO_POLL_STATUS] Task status is '${statusData.status}'. Continuing to poll.`);
+        } catch (error) {
+            console.error('[POLLO_POLL_ERROR] Unhandled exception during polling:', error);
+            const message = error instanceof Error ? error.message : 'Unknown polling error';
+            return {
+                error: message
+            };
+        }
+        await new Promise((resolve)=>setTimeout(resolve, interval));
+        attempts++;
+    }
+    console.warn(`[POLLO_POLL_WARN] Polling timed out for task ID: ${taskId}`);
+    return {
+        error: 'Video generation timed out.'
+    };
+}
+async function generateVideoServerSide(combinedImageUri) {
+    console.log('[POLLO_ACTION_START] generateVideoServerSide invoked.');
+    const apiKey = process.env.POLLO_API_KEY;
+    if (!apiKey) {
+        console.error('[POLLO_ACTION_FATAL] POLLO_API_KEY environment variable is not set or not accessible.');
+        return {
+            error: 'API key is not configured on the server.'
+        };
+    }
+    console.log('[POLLO_ACTION_LOG] POLLO_API_KEY found.');
+    try {
+        console.log('[POLLO_ACTION_LOG] Sending task creation request to Pollo.ai...');
+        const startResponse = await fetch('https://pollo.ai/api/platform/generation/kling-ai/kling-v2-1', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey
+            },
+            body: JSON.stringify({
+                input: {
+                    prompt: 'make the two people in the image kiss passionately, 4k, cinematic, high quality',
+                    image: combinedImageUri,
+                    negativePrompt: 'ugly, disfigured, low quality, blurry',
+                    strength: 50,
+                    length: 5,
+                    mode: "std"
+                }
+            })
+        });
+        if (!startResponse.ok) {
+            const errorBody = await startResponse.text();
+            console.error(`[POLLO_ACTION_ERROR] Failed to start task with status ${startResponse.status}:`, errorBody);
+            return {
+                error: `Failed to start video generation: ${startResponse.statusText}`
+            };
+        }
+        const startData = await startResponse.json();
+        const taskId = startData.taskId;
+        if (!taskId) {
+            console.error('[POLLO_ACTION_ERROR] Pollo.ai response did not include a task ID.', startData);
+            return {
+                error: "Video provider did not return a task ID."
+            };
+        }
+        console.log(`[POLLO_ACTION_LOG] Task created successfully with ID: ${taskId}.`);
+        return await pollForVideo(taskId, apiKey);
+    } catch (error) {
+        console.error('[POLLO_ACTION_FATAL] Unhandled exception in generateVideoServerSide:', error);
+        const message = error instanceof Error ? error.message : "An unknown server error occurred.";
+        return {
+            error: message
+        };
+    }
+}
+async function getSourceImage(image1, image2) {
+    console.log('[ACTION_LOG] Using second image (crush) as the source for video generation.');
+    return image2;
+}
+async function createKissVideoAction(input) {
+    console.log('[ACTION_START] createKissVideoAction invoked.');
+    const { userId, image1DataUri, image2_data_uri } = input;
+    if (!userId || !image1DataUri || !image2_data_uri) {
+        console.error('[ACTION_FATAL] Missing one or more required inputs.', {
+            hasUserId: !!userId,
+            hasImage1: !!image1DataUri,
+            hasImage2: !!image2_data_uri
+        });
+        return {
+            error: "Internal server error: Missing required data."
+        };
+    }
+    try {
+        console.log(`[ACTION_LOG] Checking profile for user: ${userId}`);
+        const userRef = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2f$firebase$2d$admin$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["admin"].db.doc(`users/${userId}`);
+        const docSnap = await userRef.get();
+        if (!docSnap.exists) {
+            console.error(`[ACTION_ERROR] User profile not found for UID: ${userId}`);
+            return {
+                error: "User profile not found."
+            };
+        }
+        const userProfile = docSnap.data();
+        console.log(`[ACTION_LOG] User profile found. Subscribed: ${userProfile.isSubscribed}, Credits: ${userProfile.credits}`);
+        if (!userProfile.isSubscribed && userProfile.credits <= 0) {
+            console.warn(`[ACTION_WARN] User ${userId} has insufficient credits.`);
+            return {
+                error: "You do not have enough credits to generate a video."
+            };
+        }
+        const sourceImage = await getSourceImage(image1DataUri, image2_data_uri);
+        console.log('[ACTION_LOG] Starting video generation via integrated server-side action...');
+        const result = await generateVideoServerSide(sourceImage);
+        if (result.error || !result.videoUrl) {
+            console.error('[ACTION_ERROR] Integrated action failed:', result.error);
+            return {
+                error: result.error || "Failed to generate video."
+            };
+        }
+        console.log('[ACTION_LOG] Video generation successful. Decrementing credits if applicable...');
+        if (!userProfile.isSubscribed) {
+            await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2f$firebase$2d$admin$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["decrementUserCreditsAdmin"])(userId);
+            console.log(`[ACTION_LOG] Credits decremented for user ${userId}.`);
+        } else {
+            console.log(`[ACTION_LOG] User ${userId} is subscribed, not decrementing credits.`);
+        }
+        console.log('[ACTION_SUCCESS] createKissVideoAction completed successfully.');
+        return {
+            videoUrl: result.videoUrl,
+            sourceImageDataUri: sourceImage
+        };
+    } catch (e) {
+        const message = e instanceof Error ? e.message : 'An unknown error occurred during video creation.';
+        console.error('[ACTION_FATAL] Unhandled exception in createKissVideoAction:', message, e);
+        return {
+            error: message
+        };
+    }
 }
 async function decrementCreditsAction(userId) {
     try {
@@ -269,10 +410,10 @@ async function decrementCreditsAction(userId) {
 }
 ;
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$action$2d$validate$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["ensureServerEntryExports"])([
-    getApiKey,
+    createKissVideoAction,
     decrementCreditsAction
 ]);
-(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(getApiKey, "004260e38abab04186f914776b6aae2965d6716645", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(createKissVideoAction, "4002e87bb34cf261a69802841988a10a259b719e84", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(decrementCreditsAction, "40a0dafb7bfb45ab9ee8bfbe36bcc69748606eca00", null);
 __turbopack_async_result__();
 } catch(e) { __turbopack_async_result__(e); } }, false);}),
@@ -287,7 +428,6 @@ var __turbopack_async_dependencies__ = __turbopack_handle_async_dependencies__([
     __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__
 ]);
 ([__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__] = __turbopack_async_dependencies__.then ? (await __turbopack_async_dependencies__)() : __turbopack_async_dependencies__);
-;
 ;
 __turbopack_async_result__();
 } catch(e) { __turbopack_async_result__(e); } }, false);}),
@@ -312,8 +452,7 @@ __turbopack_async_result__();
 var { g: global, __dirname, a: __turbopack_async_module__ } = __turbopack_context__;
 __turbopack_async_module__(async (__turbopack_handle_async_dependencies__, __turbopack_async_result__) => { try {
 __turbopack_context__.s({
-    "004260e38abab04186f914776b6aae2965d6716645": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getApiKey"]),
-    "40a0dafb7bfb45ab9ee8bfbe36bcc69748606eca00": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["decrementCreditsAction"])
+    "4002e87bb34cf261a69802841988a10a259b719e84": (()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["createKissVideoAction"])
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/app/actions.ts [app-rsc] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i('[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => "[project]/src/app/actions.ts [app-rsc] (ecmascript)" } [app-rsc] (server actions loader, ecmascript) <locals>');
@@ -330,8 +469,7 @@ __turbopack_async_result__();
 var { g: global, __dirname, a: __turbopack_async_module__ } = __turbopack_context__;
 __turbopack_async_module__(async (__turbopack_handle_async_dependencies__, __turbopack_async_result__) => { try {
 __turbopack_context__.s({
-    "004260e38abab04186f914776b6aae2965d6716645": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["004260e38abab04186f914776b6aae2965d6716645"]),
-    "40a0dafb7bfb45ab9ee8bfbe36bcc69748606eca00": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["40a0dafb7bfb45ab9ee8bfbe36bcc69748606eca00"])
+    "4002e87bb34cf261a69802841988a10a259b719e84": (()=>__TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__["4002e87bb34cf261a69802841988a10a259b719e84"])
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$module__evaluation$3e$__ = __turbopack_context__.i('[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => "[project]/src/app/actions.ts [app-rsc] (ecmascript)" } [app-rsc] (server actions loader, ecmascript) <module evaluation>');
 var __TURBOPACK__imported__module__$5b$project$5d2f2e$next$2d$internal$2f$server$2f$app$2f$page$2f$actions$2e$js__$7b$__ACTIONS_MODULE0__$3d3e$__$225b$project$5d2f$src$2f$app$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$2922$__$7d$__$5b$app$2d$rsc$5d$__$28$server__actions__loader$2c$__ecmascript$29$__$3c$exports$3e$__ = __turbopack_context__.i('[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => "[project]/src/app/actions.ts [app-rsc] (ecmascript)" } [app-rsc] (server actions loader, ecmascript) <exports>');
