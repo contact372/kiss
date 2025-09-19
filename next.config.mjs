@@ -6,9 +6,6 @@ const nextConfig = {
       bodySizeLimit: '4.5mb', // Default is 1mb, combined images can exceed this.
     },
   },
-  // This line ensures the @google/genai package is properly compiled by Next.js,
-  // resolving module conflicts between ESM and CommonJS.
-  transpilePackages: ['@google/genai'],
   typescript: {
     ignoreBuildErrors: true,
   },
