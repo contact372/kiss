@@ -1,3 +1,4 @@
+# Dockerfile pour une application Next.js avec Standalone Output
 
 # 1. Étape de dépendances
 FROM node:20-slim AS deps
@@ -10,8 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl
 # Copiez package.json et le lockfile
 COPY package.json package-lock.json* ./
 
-# Installez les dépendances
-RUN npm ci
+# Installez les dépendances de manière robuste
+RUN npm install
 
 # 2. Étape de build
 FROM node:20-slim AS builder
