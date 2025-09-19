@@ -13,10 +13,10 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   console.log('[FUSE_FACES_FLOW] Starting image fusion process...');
 
   try {
-    // Downgrading the model to gemini-1.0-pro to circumvent the strict quota limits
-    // on the newer gemini-1.5-pro model, which seem to persist despite billing being enabled.
+    // Using 'gemini-pro-vision', the standard and stable model for multimodal inputs (text and images).
+    // This should resolve the '404 Not Found' errors and is less likely to hit the aggressive quotas of the 1.5-pro model.
     const generationResponse = await ai.generate({
-      model: 'googleai/gemini-1.0-pro',
+      model: 'googleai/gemini-pro-vision',
       prompt: [
         {
           text: `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. \n\nThey should be standing side-by-side against a simple, neutral background. The person from the first image should be on the left, and the person from the second image on the right. \n\nMost importantly, you must faithfully reproduce the facial features of each person from their respective input images. Do not change their faces.`,
