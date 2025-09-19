@@ -1,77 +1,99 @@
 'use server';
 /**
- * @fileOverview A flow for fusing two faces into a single scene using a specialized image generation model.
- * This implementation uses the @google/genai SDK directly to access models capable of image output.
+ * @fileOverview A flow for fusing two faces into a single scene by calling the Google AI REST API directly.
+ * This approach avoids SDK complexities and build issues.
  */
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
-// Last resort: Using a dynamic require and checking for the default export,
-// which can sometimes resolve complex module interoperability issues in Next.js.
-const GoogleGenerativeAI = require('@google/genai').GoogleGenerativeAI;
+// --- Helper Functions --- 
 
-async function urlToGenerativePart(url: string, mimeType: string) {
+/**
+ * Fetches an image from a URL and converts it to a base64-encoded string.
+ * This is required for inline data in the REST API payload.
+ */
+async function urlToBase64(url: string): Promise<string> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch image from ${url}. Status: ${response.status}`);
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  return { inlineData: { data: buffer.toString('base64'), mimeType } };
+  return buffer.toString('base64');
 }
 
+/**
+ * The main function to fuse faces. It now calls the Google AI REST API.
+ * It takes two image URIs and generates a new image combining them.
+ */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion process with @google/genai SDK...');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion process via REST API...');
 
   if (!process.env.GOOGLE_API_KEY) {
-    const errorMsg = 'GOOGLE_API_KEY environment variable is not set. Please create a key in Google AI Studio and add it to your environment.';
+    const errorMsg = 'GOOGLE_API_KEY environment variable is not set.';
     console.error(`[FUSE_FACES_FLOW_ERROR] ${errorMsg}`);
     return { error: errorMsg };
   }
 
   try {
-    // This instantiation might fail if the constructor is not found.
-    if (!GoogleGenerativeAI) {
-      throw new Error('Failed to load GoogleGenerativeAI constructor. The @google/genai module may not be correctly resolved.');
-    }
+    console.log('[FUSE_FACES_FLOW] Converting image URIs to base64 data...');
+    const image1Base64 = await urlToBase64(input.image1Uri);
+    const image2Base64 = await urlToBase64(input.image2Uri);
 
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-    
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-preview-0514' });
-
-    console.log('[FUSE_FACES_FLOW] Fetching and converting images to inline data...');
-    const image1Part = await urlToGenerativePart(input.image1Uri, 'image/png');
-    const image2Part = await urlToGenerativePart(input.image2Uri, 'image/png');
+    const model = 'gemini-1.5-flash-preview-0514';
+    const apiKey = process.env.GOOGLE_API_KEY;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. They should be standing side-by-side against a simple, neutral background. The person from the first image should be on the left, and the person from the second image on the right. Most importantly, you must faithfully reproduce the facial features of each person from their respective input images. Do not change their faces.`;
 
-    console.log('[FUSE_FACES_FLOW] Calling the generative model...');
-    const result = await model.generateContent([prompt, image1Part, image2Part]);
-    const response = result.response;
+    // Construct the payload for the REST API.
+    const payload = {
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'image/png', data: image1Base64 } },
+            { inline_data: { mime_type: 'image/png', data: image2Base64 } },
+          ],
+        },
+      ],
+      generation_config: {
+        response_mime_type: 'image/png',
+      },
+    };
 
-    console.log('[FUSE_FACES_FLOW_DEBUG] Full generation response:', JSON.stringify(response, null, 2));
-    
-    const firstCandidate = response.candidates?.[0];
-    const imagePart = firstCandidate?.content?.parts.find(p => p.hasOwnProperty('inlineData'));
+    console.log('[FUSE_FACES_FLOW] Calling the Google AI REST API...');
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-    if (!imagePart || !('inlineData' in imagePart)) {
-      const errorMsg = 'The model did not return a valid image candidate in the response.';
-      console.error(`[FUSE_FACES_FLOW_ERROR] ${errorMsg}`);
-      console.error(`[FUSE_FACES_FLOW_ERROR] Text response from model (if any): ${response.text()}`);
-      return { error: errorMsg };
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
     }
 
-    const { inlineData } = imagePart;
-    const fusedImageUri = `data:${inlineData.mimeType};base64,${inlineData.data}`;
+    const responseData = await response.json();
 
-    console.log('[FUSE_FACES_FLOW] Successfully generated fused image.');
+    // Extract the base64 image data from the API response.
+    const candidate = responseData.candidates?.[0];
+    const imagePart = candidate?.content?.parts.find((p: any) => p.inline_data);
+    if (!imagePart) {
+      throw new Error('API response did not contain valid image data.');
+    }
+
+    const base64Data = imagePart.inline_data.data;
+    const mimeType = imagePart.inline_data.mime_type;
+    const fusedImageUri = `data:${mimeType};base64,${base64Data}`;
+
+    console.log('[FUSE_FACES_FLOW] Successfully generated fused image via REST API.');
     return { fusedImageUri };
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
     console.error(`[FUSE_FACES_FLOW_ERROR] An error occurred during image fusion: ${errorMessage}`);
-    // Provide a more specific error message if it's the constructor issue.
-    if (err instanceof TypeError && err.message.includes('is not a constructor')) {
-        return { error: `Failed to fuse images: The GoogleGenerativeAI object loaded from @google/genai is not a valid constructor. There is a critical issue with module resolution in the project.` };
-    }
     return { error: `Failed to fuse images: ${errorMessage}` };
   }
 }
+
