@@ -1,52 +1,42 @@
-# Dockerfile pour une application Next.js avec Standalone Output
-
-# 1. Étape de dépendances
-FROM node:20-slim AS deps
-WORKDIR /app
-
-# Installez les paquets dont Next.js a besoin pour le build
-# https://github.com/nodejs/docker-node/blob/main/docs/BestPractices.md#non-root-user
-RUN apt-get update && apt-get install -y --no-install-recommends openssl
-
-# Copiez package.json et le lockfile
-COPY package.json package-lock.json* ./
-
-# Installez les dépendances de manière robuste
-RUN npm install
-
-# 2. Étape de build
+# Étape 1: Builder - Construit l'application avec des dépendances propres
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# Copiez les dépendances de l'étape précédente
-COPY --from=deps /app/node_modules ./node_modules
+# Mettre à jour npm pour la stabilité
+RUN npm install -g npm@latest
+
+# Copier le manifeste des paquets
+COPY package.json ./
+
+# --- LA PURGE NUCLÉAIRE ---
+# En ne copiant PAS package-lock.json et en utilisant "npm install", 
+# nous forçons npm à résoudre l'arbre des dépendances à partir de zéro,
+# ce qui élimine les conflits et les corruptions.
+RUN npm install
+
+# Copier le reste du code source
 COPY . .
 
-# Générez le build de production optimisé avec standalone output
-RUN npm run build
+# Construire l'application Next.js
+RUN NEXT_TELEMETRY_DISABLED=1 npm run build
 
-# 3. Étape de production finale
-FROM node:20-slim AS runner
+# Supprimer les dépendances de développement pour l'image finale
+RUN npm prune --production
+
+# Étape 2: Runner - Exécute l'application de production
+FROM node:20-slim
 WORKDIR /app
 
-# Créez un utilisateur non-root pour la sécurité
+# Définir l'environnement de production
 ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+ENV PORT=8080
 
-# Copiez les fichiers du build standalone
-# Automatiquement copiés dans les bons dossiers grâce à "output: 'standalone'"
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copier uniquement les artefacts de build nécessaires depuis le builder
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
 
-USER nextjs
+EXPOSE 8080
 
-# Le port par défaut est 3000, mais Cloud Run l'injectera via la variable $PORT
-ENV PORT 3000
-
-# Exposez le port
-EXPOSE 3000
-
-# La commande pour démarrer le serveur de production
-CMD ["node", "server.js"]
+# Démarrer le serveur Next.js
+CMD ["sh", "-c", "npx next start -p ${PORT:-8080} -H 0.0.0.0"]
