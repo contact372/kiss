@@ -13,8 +13,8 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   console.log('[FUSE_FACES_FLOW] Starting image fusion process...');
 
   try {
-    const { candidates } = await ai.generate({
-      model: 'googleai/gemini-1.5-flash-latest', // Correct, stable model identifier
+    const generationResponse = await ai.generate({
+      model: 'googleai/gemini-1.5-flash-latest',
       prompt: [
         {
           text: `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. 
@@ -29,21 +29,22 @@ Most importantly, you must faithfully reproduce the facial features of each pers
       config: {
         // Additional configurations can be added here if needed
       },
-      output: {
-        format: 'uri', // Request a data URI directly
-      }
     });
 
-    const firstCandidate = candidates[0];
+    const firstCandidate = generationResponse.candidates[0];
 
-    if (!firstCandidate || !firstCandidate.media) {
+    if (!firstCandidate || !firstCandidate.media || !firstCandidate.media.content) {
       console.error('[FUSE_FACES_FLOW_ERROR] The model did not return a valid image candidate.');
       return { error: 'Image fusion failed to produce a result.' };
     }
 
+    // Convert the buffer to a data URI
+    const imageBuffer = firstCandidate.media.content;
+    const fusedImageUri = `data:${firstCandidate.media.contentType};base64,${imageBuffer.toString('base64')}`;
+
     console.log('[FUSE_FACES_FLOW] Successfully generated fused image.');
     return {
-      fusedImageUri: firstCandidate.media.url,
+      fusedImageUri: fusedImageUri,
     };
 
   } catch (err) {
