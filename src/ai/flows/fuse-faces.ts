@@ -3,11 +3,12 @@
  * @fileOverview A flow for fusing two faces into a single scene using a specialized image generation model.
  * This implementation uses the @google/genai SDK directly to access models capable of image output.
  */
-import { GoogleAI } from '@google/genai'; // Corrected import
 import { FuseFacesInput, FuseFacesOutput } from './types'; // Import types
 
+// Using require() to bypass ES Module resolution issues during the build.
+const { GoogleGenerativeAI } = require('@google/genai');
+
 // --- Helper function to fetch a URL and convert it to a GenerativePart --- 
-// This is crucial because the API needs the image data directly, not just a URL it can't access.
 async function urlToGenerativePart(url: string, mimeType: string) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -24,8 +25,6 @@ async function urlToGenerativePart(url: string, mimeType: string) {
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
   console.log('[FUSE_FACES_FLOW] Starting image fusion process with @google/genai SDK...');
 
-  // IMPORTANT: This requires the GOOGLE_API_KEY environment variable to be set.
-  // This key is different from the service account used by Genkit.
   if (!process.env.GOOGLE_API_KEY) {
     const errorMsg = 'GOOGLE_API_KEY environment variable is not set. Please create a key in Google AI Studio and add it to your environment.';
     console.error(`[FUSE_FACES_FLOW_ERROR] ${errorMsg}`);
@@ -33,9 +32,8 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   }
 
   try {
-    const genAI = new GoogleAI(process.env.GOOGLE_API_KEY); // Corrected class name
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
     
-    // Using a model known for image generation capabilities.
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-preview-0514' });
 
     console.log('[FUSE_FACES_FLOW] Fetching and converting images to inline data...');
@@ -51,7 +49,6 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     console.log('[FUSE_FACES_FLOW_DEBUG] Full generation response:', JSON.stringify(response, null, 2));
     
     const firstCandidate = response.candidates?.[0];
-    // Find the part that contains the generated image data
     const imagePart = firstCandidate?.content?.parts.find(p => p.hasOwnProperty('inlineData'));
 
     if (!imagePart || !('inlineData' in imagePart)) {
