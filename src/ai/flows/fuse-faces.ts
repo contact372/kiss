@@ -3,10 +3,12 @@
  * @fileOverview A flow for fusing two faces into a single scene using a specialized image generation model.
  * This implementation uses the @google/genai SDK directly to access models capable of image output.
  */
-import { GoogleGenerativeAI } from '@google/genai'; // Using the standard, clean import now.
-import { FuseFacesInput, FuseFacesOutput } from './types'; // Import types
+import { FuseFacesInput, FuseFacesOutput } from './types';
 
-// --- Helper function to fetch a URL and convert it to a GenerativePart --- 
+// Last resort: Using a dynamic require and checking for the default export,
+// which can sometimes resolve complex module interoperability issues in Next.js.
+const GoogleGenerativeAI = require('@google/genai').GoogleGenerativeAI;
+
 async function urlToGenerativePart(url: string, mimeType: string) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -16,10 +18,6 @@ async function urlToGenerativePart(url: string, mimeType: string) {
   return { inlineData: { data: buffer.toString('base64'), mimeType } };
 }
 
-/**
- * Takes two images, each with a face, and generates a new image
- * that combines both people side-by-side using the gemini-1.5-flash model.
- */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
   console.log('[FUSE_FACES_FLOW] Starting image fusion process with @google/genai SDK...');
 
@@ -30,6 +28,11 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   }
 
   try {
+    // This instantiation might fail if the constructor is not found.
+    if (!GoogleGenerativeAI) {
+      throw new Error('Failed to load GoogleGenerativeAI constructor. The @google/genai module may not be correctly resolved.');
+    }
+
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
     
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-preview-0514' });
@@ -65,6 +68,10 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
     console.error(`[FUSE_FACES_FLOW_ERROR] An error occurred during image fusion: ${errorMessage}`);
+    // Provide a more specific error message if it's the constructor issue.
+    if (err instanceof TypeError && err.message.includes('is not a constructor')) {
+        return { error: `Failed to fuse images: The GoogleGenerativeAI object loaded from @google/genai is not a valid constructor. There is a critical issue with module resolution in the project.` };
+    }
     return { error: `Failed to fuse images: ${errorMessage}` };
   }
 }
