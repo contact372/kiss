@@ -3,10 +3,8 @@
  * @fileOverview A flow for fusing two faces into a single scene using a specialized image generation model.
  * This implementation uses the @google/genai SDK directly to access models capable of image output.
  */
+import { GoogleGenerativeAI } from '@google/genai'; // Using the standard, clean import now.
 import { FuseFacesInput, FuseFacesOutput } from './types'; // Import types
-
-// Using require() to bypass ES Module resolution issues during the build.
-const { GoogleGenerativeAI } = require('@google/genai');
 
 // --- Helper function to fetch a URL and convert it to a GenerativePart --- 
 async function urlToGenerativePart(url: string, mimeType: string) {
