@@ -15,7 +15,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   try {
     // Using the powerful Imagen 3 model via Vertex AI
     const { candidates } = await ai.generate({
-      model: 'googleai/imagen-3.0-generate-002', // Correct model for Imagen 3 on Vertex AI
+      model: 'imagen-3.0-generate-002', // Correct model for Imagen 3 on Vertex AI (without the googleai/ prefix)
       prompt: [
         {
           text: `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. 
@@ -52,4 +52,3 @@ Most importantly, you must faithfully reproduce the facial features of each pers
     };
   }
 }
-
