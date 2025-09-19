@@ -14,7 +14,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
 
   try {
     const generationResponse = await ai.generate({
-      model: 'googleai/gemini-1.5-flash-latest',
+      model: 'googleai/imagen-2', // Sticking with the correct model for image generation
       prompt: [
         {
           text: `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. 
@@ -30,6 +30,9 @@ Most importantly, you must faithfully reproduce the facial features of each pers
         // Additional configurations can be added here if needed
       },
     });
+
+    // Log the entire response for debugging purposes
+    console.log('[FUSE_FACES_FLOW_DEBUG] Full generation response:', JSON.stringify(generationResponse, null, 2));
 
     const firstCandidate = generationResponse.candidates[0];
 
