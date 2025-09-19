@@ -13,10 +13,10 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   console.log('[FUSE_FACES_FLOW] Starting image fusion process...');
 
   try {
-    // Let's try a more powerful Gemini model. The 'imagen-2' model is not being found.
-    // gemini-1.5-pro is a powerful multimodal model that might be able to handle this.
+    // Downgrading the model to gemini-1.0-pro to circumvent the strict quota limits
+    // on the newer gemini-1.5-pro model, which seem to persist despite billing being enabled.
     const generationResponse = await ai.generate({
-      model: 'googleai/gemini-1.5-pro-latest',
+      model: 'googleai/gemini-1.0-pro',
       prompt: [
         {
           text: `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. \n\nThey should be standing side-by-side against a simple, neutral background. The person from the first image should be on the left, and the person from the second image on the right. \n\nMost importantly, you must faithfully reproduce the facial features of each person from their respective input images. Do not change their faces.`,
@@ -56,4 +56,3 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     };
   }
 }
-
