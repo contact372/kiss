@@ -1,62 +1,117 @@
 'use server';
+
+import sharp from 'sharp';
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
-type B64 = { data: string; mime: string };
+/* ----------------------- Helpers ----------------------- */
 
-async function fetchB64(url: string): Promise<B64> {
+// Télécharge une image en Buffer + son mime
+async function fetchImage(url: string): Promise<{ buf: Buffer; mime: string }> {
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`Fetch ${url} => ${r.status}`);
-  const buf = Buffer.from(await r.arrayBuffer());
-  const mime = r.headers.get('content-type') || (/\.(jpe?g)$/i.test(url) ? 'image/jpeg' : 'image/png');
-  return { data: buf.toString('base64'), mime };
+  if (!r.ok) throw new Error(`Fetch failed ${url}: ${r.status}`);
+  const arrayBuf = await r.arrayBuffer();
+  const mime =
+    r.headers.get('content-type') ||
+    (/\.(jpe?g)$/i.test(url) ? 'image/jpeg' : 'image/png');
+  return { buf: Buffer.from(arrayBuf), mime };
 }
 
+// Construit un collage 16:9 (1280x720) : image1 à gauche, image2 à droite.
+// Chaque côté est “cover” (recadré si besoin) pour remplir sa moitié proprement.
+async function makeSideBySideCollagePNG(
+  leftBuf: Buffer,
+  rightBuf: Buffer
+): Promise<Buffer> {
+  const W = 1280;
+  const H = 720;
+  const panelW = Math.floor(W / 2);
+
+  // prépare chaque panneau en 16:9 (cover)
+  const leftPanel = await sharp(leftBuf)
+    .resize(panelW, H, { fit: 'cover', position: 'center' })
+    .toBuffer();
+
+  const rightPanel = await sharp(rightBuf)
+    .resize(panelW, H, { fit: 'cover', position: 'center' })
+    .toBuffer();
+
+  // canevas clair
+  const canvas = sharp({
+    create: {
+      width: W,
+      height: H,
+      channels: 3,
+      background: { r: 245, g: 245, b: 245 }
+    }
+  });
+
+  const out = await canvas
+    .composite([
+      { input: leftPanel, left: 0, top: 0 },
+      { input: rightPanel, left: panelW, top: 0 }
+    ])
+    .png()
+    .toBuffer();
+
+  return out;
+}
+
+// Essaie de trouver un vrai modèle *image-preview* accessible à ta clé (optionnel)
 async function pickImagePreviewModel(apiKey: string): Promise<string | null> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
   );
   if (!res.ok) return null;
   const data = await res.json();
-  const models: Array<{ name: string }> = data.models ?? data?.model ?? [];
-  // Heuristique simple : garder ceux qui contiennent "image-preview"
-  const m = models.find(m => /image-preview/i.test(m.name));
-  return m?.name ?? null;
+  const list: Array<{ name: string }> = data.models ?? [];
+  const hit = list.find(m => /image-preview/i.test(m.name));
+  // L’API v1beta attend l’URI sans le préfixe "models/", donc on normalise :
+  // - si name est "models/gemini-2.5-flash-image-preview", on garde la partie après "models/"
+  return hit ? hit.name.replace(/^models\//, '') : null;
 }
 
+/* ----------------------- Action principale ----------------------- */
+
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  const key = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!key) return { error: 'Missing GOOGLE_GENAI_API_KEY / GOOGLE_API_KEY' };
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) return { error: 'Missing GOOGLE_GENAI_API_KEY / GOOGLE_API_KEY' };
 
   try {
-    const [img1, img2] = await Promise.all([fetchB64(input.image1Uri), fetchB64(input.image2Uri)]);
+    // 1) Télécharge les 2 images
+    const [{ buf: buf1 }, { buf: buf2 }] = await Promise.all([
+      fetchImage(input.image1Uri),
+      fetchImage(input.image2Uri)
+    ]);
 
-    // 1) Trouver un modèle image-preview vraiment disponible
-    const modelName = await pickImagePreviewModel(key);
-    if (!modelName) {
-      return {
-        error:
-          'Aucun modèle "image-preview" n’est disponible pour cette clé. ' +
-          'Deux options : (A) activer l’accès image-preview dans Google AI Studio, ' +
-          'ou (B) passer sur Images API (images:generate), qui est texte→image uniquement.'
-      };
-    }
+    // 2) Fabrique un collage PNG 16:9
+    const collagePng = await makeSideBySideCollagePNG(buf1, buf2);
+    const collageB64 = collagePng.toString('base64');
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${key}`;
+    // 3) Choisis un modèle image-preview
+    const discovered = await pickImagePreviewModel(apiKey);
+    const model = discovered || 'gemini-2.5-flash-image-preview';
+
+    // 4) Appel API v1beta (une seule image en entrée)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt =
       'Create a single 16:9 photorealistic image (American shot). ' +
-      'Left = person inspired by first photo, Right = person inspired by second photo. ' +
-      'Neutral background. Preserve likeness.';
+      'Use the collage as reference: the person on the **left** comes from the left side, ' +
+      'and the person on the **right** comes from the right side. ' +
+      'Place them side-by-side against a simple neutral background. ' +
+      'Preserve likeness naturally (no caricature), consistent lighting and color grading.';
 
     const payload = {
-      contents: [{
-        role: 'user',
-        parts: [
-          { inline_data: { mime_type: img1.mime, data: img1.data } },
-          { inline_data: { mime_type: img2.mime, data: img2.data } },
-          { text: prompt }
-        ]
-      }]
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { inline_data: { mime_type: 'image/png', data: collageB64 } },
+            { text: prompt }
+          ]
+        }
+      ]
+      // ⚠️ Pas de generation_config exotique ici ; les modèles image-preview renvoient l’image dans inline_data.
     };
 
     const resp = await fetch(url, {
@@ -71,11 +126,15 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     }
 
     const data = await resp.json();
+
+    // 5) Extraction de l’image générée
     const parts = data?.candidates?.[0]?.content?.parts ?? [];
-    const imgPart = parts.find((p: any) => p.inline_data);
+    const imgPart = parts.find((p: any) => p?.inline_data);
 
     if (!imgPart) {
-      const txt = parts.find((p: any) => p.text)?.text;
+      const txt = parts.find((p: any) => p?.text)?.text;
+      // Logs utiles côté serveur pour debug
+      console.error('[FUSE_FACES] No image in response. Full response:', JSON.stringify(data));
       return {
         error:
           `No image in response (souvent un refus "Safety" pour les visages).` +
@@ -84,10 +143,11 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     }
 
     const mime = imgPart.inline_data.mime_type || 'image/png';
-    const b64  = imgPart.inline_data.data;
-    return { fusedImageUri: `data:${mime};base64,${b64}` };
+    const b64 = imgPart.inline_data.data;
 
+    return { fusedImageUri: `data:${mime};base64,${b64}` };
   } catch (e: any) {
+    console.error('[FUSE_FACES] Unexpected error:', e);
     return { error: e?.message ?? 'Unknown error' };
   }
 }
