@@ -5,7 +5,7 @@
  */
 import { fuseFaces } from './fuse-faces';
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types'; // Import types
-import { admin } from 'src/lib/firebase/firebase-admin';
+import { admin } from '@/lib/firebase/firebase-admin';
 
 /**
  * A two-step flow to generate a video:
