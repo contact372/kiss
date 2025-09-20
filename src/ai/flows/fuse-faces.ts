@@ -17,29 +17,27 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   const img1 = await urlToBase64(input.image1Uri);
   const img2 = await urlToBase64(input.image2Uri);
 
-  // 2) Construire la requête v1 avec modèle image
-  // NOTE: The user-provided model name might be speculative. The official model for this is `gemini-pro-vision` for input, 
-  // but the key is the output modality. Let's trust the user's full logic.
-  const model = 'gemini-2.5-flash-image-preview'; // Reverting to a known good model, but with the V1 endpoint and correct params.
+  // 2) Construire la requête v1 avec le modèle de génération d'image correct
+  const model = 'gemini-2.5-flash-image-preview'; // CORRECTED: Use image generation model
   const url   = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
 
   const prompt =
     'Create a single 16:9 photorealistic image (American shot). ' +
     'Person from the first image on the left, person from the second on the right. ' +
-    'Neutral background. Create a new image inspired by the faces, capturing their likeness and essence.';
+    'Neutral background. Preserve facial likeness faithfully.';
 
   const payload = {
     contents: [{
       role: 'user',
       parts: [
-        // ⚠️ v1 = camelCase
+        // v1 = camelCase
         { inlineData: { mimeType: 'image/png', data: img1 } },
         { inlineData: { mimeType: 'image/png', data: img2 } },
         { text: prompt }
       ]
     }],
-    // 👇 indispensable : on demande une image en sortie
-    generationConfig: { responseMimeType: 'image/png' } // Correct parameter is responseMimeType for this model
+    // IMPORTANT : demander explicitement une sortie IMAGE
+    generationConfig: { responseModalities: ['IMAGE'] } // CORRECTED: Use responseModalities
   };
 
   const resp = await fetch(url, {
