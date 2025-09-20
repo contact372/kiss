@@ -20,7 +20,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   // 2) Construire la requête v1 avec modèle image
   // NOTE: The user-provided model name might be speculative. The official model for this is `gemini-pro-vision` for input, 
   // but the key is the output modality. Let's trust the user's full logic.
-  const model = 'gemini-1.5-flash-latest'; // Reverting to a known good model, but with the V1 endpoint and correct params.
+  const model = 'gemini-2.5-flash-image-preview'; // Reverting to a known good model, but with the V1 endpoint and correct params.
   const url   = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
 
   const prompt =
