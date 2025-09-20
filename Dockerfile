@@ -5,14 +5,13 @@ WORKDIR /app
 # Mettre à jour npm pour la stabilité
 RUN npm install -g npm@latest
 
-# Copier le manifeste des paquets
-COPY package.json ./
+# Copier le manifeste des paquets ET le fichier de verrouillage
+COPY package.json package-lock.json ./
 
-# --- LA PURGE NUCLÉAIRE ---
-# En ne copiant PAS package-lock.json et en utilisant "npm install", 
-# nous forçons npm à résoudre l'arbre des dépendances à partir de zéro,
-# ce qui élimine les conflits et les corruptions.
-RUN npm install
+# --- Installation Fiable ---
+# Utiliser "npm ci" qui est plus rapide, plus strict et plus fiable pour les builds
+# en se basant sur package-lock.json.
+RUN npm ci
 
 # Copier le reste du code source
 COPY . .
