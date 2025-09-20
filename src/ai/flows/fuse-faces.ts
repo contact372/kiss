@@ -38,7 +38,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const image1Base64 = await urlToBase64(input.image1Uri);
     const image2Base64 = await urlToBase64(input.image2Uri);
 
-    const model = 'gemini-1.5-flash-preview-0514';
+    const model = 'gemini-1.5-flash-latest'; // CORRECTED: Use the valid API model name.
     const apiKey = process.env.GOOGLE_API_KEY;
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
@@ -55,7 +55,6 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
           ],
         },
       ],
-      // NOTE: Removed generation_config. The model infers the image output from the prompt.
     };
 
     console.log('[FUSE_FACES_FLOW] Calling the Google AI REST API...');
