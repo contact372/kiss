@@ -55,9 +55,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
           ],
         },
       ],
-      generation_config: {
-        response_mime_type: 'image/png',
-      },
+      // NOTE: Removed generation_config. The model infers the image output from the prompt.
     };
 
     console.log('[FUSE_FACES_FLOW] Calling the Google AI REST API...');
@@ -70,8 +68,8 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
+      const errorBody = await response.json(); // API errors are in JSON format
+      throw new Error(`API request failed with status ${response.status}: ${JSON.stringify(errorBody)}`);
     }
 
     const responseData = await response.json();
@@ -80,6 +78,9 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const candidate = responseData.candidates?.[0];
     const imagePart = candidate?.content?.parts.find((p: any) => p.inline_data);
     if (!imagePart) {
+      // Log the text response if no image is found, which might contain a refusal.
+      const textResponse = candidate?.content?.parts.find((p: any) => p.text)?.text;
+      console.error('[FUSE_FACES_FLOW_ERROR] API response did not contain image data. Model response text: ', textResponse);
       throw new Error('API response did not contain valid image data.');
     }
 
@@ -96,4 +97,3 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     return { error: `Failed to fuse images: ${errorMessage}` };
   }
 }
-
