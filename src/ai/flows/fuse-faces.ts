@@ -3,9 +3,11 @@
 import sharp from 'sharp';
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
-/* ----------------------- Helpers ----------------------- */
+/* =========================================================
+   Helpers
+   ========================================================= */
 
-// Télécharge une image en Buffer + son mime
+/** Télécharge une image et retourne Buffer + mime */
 async function fetchImage(url: string): Promise<{ buf: Buffer; mime: string }> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Fetch failed ${url}: ${r.status}`);
@@ -16,8 +18,7 @@ async function fetchImage(url: string): Promise<{ buf: Buffer; mime: string }> {
   return { buf: Buffer.from(arrayBuf), mime };
 }
 
-// Construit un collage 16:9 (1280x720) : image1 à gauche, image2 à droite.
-// Chaque côté est “cover” (recadré si besoin) pour remplir sa moitié proprement.
+/** Construit un collage 16:9 (1280x720) : image1 à gauche, image2 à droite (cover). */
 async function makeSideBySideCollagePNG(
   leftBuf: Buffer,
   rightBuf: Buffer
@@ -26,7 +27,6 @@ async function makeSideBySideCollagePNG(
   const H = 720;
   const panelW = Math.floor(W / 2);
 
-  // prépare chaque panneau en 16:9 (cover)
   const leftPanel = await sharp(leftBuf)
     .resize(panelW, H, { fit: 'cover', position: 'center' })
     .toBuffer();
@@ -35,42 +35,105 @@ async function makeSideBySideCollagePNG(
     .resize(panelW, H, { fit: 'cover', position: 'center' })
     .toBuffer();
 
-  // canevas clair
   const canvas = sharp({
     create: {
       width: W,
       height: H,
       channels: 3,
-      background: { r: 245, g: 245, b: 245 }
-    }
+      background: { r: 245, g: 245, b: 245 },
+    },
   });
 
-  const out = await canvas
+  return await canvas
     .composite([
       { input: leftPanel, left: 0, top: 0 },
-      { input: rightPanel, left: panelW, top: 0 }
+      { input: rightPanel, left: panelW, top: 0 },
     ])
     .png()
     .toBuffer();
-
-  return out;
 }
 
-// Essaie de trouver un vrai modèle *image-preview* accessible à ta clé (optionnel)
+/** Tente de trouver un modèle *image-preview* accessible à la clé (v1beta). */
 async function pickImagePreviewModel(apiKey: string): Promise<string | null> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
   );
   if (!res.ok) return null;
+
   const data = await res.json();
-  const list: Array<{ name: string }> = data.models ?? [];
-  const hit = list.find(m => /image-preview/i.test(m.name));
-  // L’API v1beta attend l’URI sans le préfixe "models/", donc on normalise :
-  // - si name est "models/gemini-2.5-flash-image-preview", on garde la partie après "models/"
+  const list: Array<{ name: string }> = data?.models ?? [];
+  const hit = list.find((m) => /image-preview/i.test(m.name));
+
+  // v1beta veut le nom sans le préfixe "models/"
   return hit ? hit.name.replace(/^models\//, '') : null;
 }
 
-/* ----------------------- Action principale ----------------------- */
+/** Utilise la variable d’env si fournie, sinon autodétection, sinon valeur par défaut. */
+async function resolveModelName(apiKey: string): Promise<string> {
+  const fromEnv =
+    process.env.GOOGLE_IMAGE_MODEL?.replace(/^models\//, '').trim();
+  if (fromEnv) return fromEnv;
+
+  const detected = await pickImagePreviewModel(apiKey);
+  if (detected) return detected;
+
+  // Valeur sûre courante côté preview :
+  return 'gemini-2.5-flash-image-preview';
+}
+
+/** Appel API avec time-out (évite les loaders qui tournent indéfiniment). */
+async function postJsonWithTimeout<T>(
+  url: string,
+  payload: unknown,
+  ms = 60000
+): Promise<{ ok: boolean; status: number; json?: T; text?: string }> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
+      body: JSON.stringify(payload),
+    });
+
+    const ct = resp.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const json = (await resp.json()) as T;
+      return { ok: resp.ok, status: resp.status, json };
+    }
+    const text = await resp.text();
+    return { ok: resp.ok, status: resp.status, text };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** Récupère l’image (inline_data/inlineData) et le texte éventuel d’un résultat. */
+function extractImageFromCandidates(data: any): {
+  imageB64?: string;
+  mime?: string;
+  text?: string;
+} {
+  const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
+  const imgPart =
+    parts.find((p) => p?.inline_data) ?? parts.find((p) => p?.inlineData);
+  const txtPart = parts.find((p) => typeof p?.text === 'string');
+
+  const mime =
+    imgPart?.inline_data?.mime_type ??
+    imgPart?.inlineData?.mimeType ??
+    undefined;
+  const imageB64 =
+    imgPart?.inline_data?.data ?? imgPart?.inlineData?.data ?? undefined;
+
+  return { imageB64, mime, text: txtPart?.text };
+}
+
+/* =========================================================
+   Action principale
+   ========================================================= */
 
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
   const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -80,72 +143,65 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     // 1) Télécharge les 2 images
     const [{ buf: buf1 }, { buf: buf2 }] = await Promise.all([
       fetchImage(input.image1Uri),
-      fetchImage(input.image2Uri)
+      fetchImage(input.image2Uri),
     ]);
 
     // 2) Fabrique un collage PNG 16:9
     const collagePng = await makeSideBySideCollagePNG(buf1, buf2);
     const collageB64 = collagePng.toString('base64');
 
-    // 3) Choisis un modèle image-preview
-    const discovered = await pickImagePreviewModel(apiKey);
-    const model = discovered || 'gemini-2.5-flash-image-preview';
-
-    // 4) Appel API v1beta (une seule image en entrée)
+    // 3) Choix du modèle image-preview (v1beta)
+    const model = await resolveModelName(apiKey);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
+    // 4) Prompt prudent (évite les refus “identité”) + une seule image en entrée
     const prompt =
-      'Create a single 16:9 photorealistic image (American shot). ' +
-      'Use the collage as reference: the person on the **left** comes from the left side, ' +
-      'and the person on the **right** comes from the right side. ' +
-      'Place them side-by-side against a simple neutral background. ' +
-      'Preserve likeness naturally (no caricature), consistent lighting and color grading.';
+      'Create one new 16:9 photorealistic image (American shot). ' +
+      'Use the provided collage only as *inspiration* for two generic people: ' +
+      'the left person is inspired by the collage left side and the right person by the right side. ' +
+      'Do not reproduce any unique identity; generate an original scene with two generic people. ' +
+      'Place them side-by-side on a simple neutral background with consistent lighting and color grading.';
 
     const payload = {
       contents: [
         {
           role: 'user',
           parts: [
-            { inline_data: { mime_type: 'image/png', data: collageB64 } },
-            { text: prompt }
-          ]
-        }
-      ]
-      // ⚠️ Pas de generation_config exotique ici ; les modèles image-preview renvoient l’image dans inline_data.
+            { inline_data: { mime_type: 'image/png', data: collageB64 } }, // v1beta = snake_case
+            { text: prompt },
+          ],
+        },
+      ],
+      // Pas de generation_config exotique : les modèles image-preview renvoient l’image en inline_data.
     };
 
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!resp.ok) {
-      const body = await resp.text();
-      return { error: `API ${resp.status}: ${body}` };
+    // 5) Appel API (timeout 60s pour éviter les loaders infinis)
+    const res = await postJsonWithTimeout<any>(url, payload, 60000);
+    if (!res.ok) {
+      const body = res.text ?? JSON.stringify(res.json ?? {}, null, 2);
+      return { error: `API ${res.status}: ${body}` };
     }
 
-    const data = await resp.json();
+    // 6) Extraction de l’image
+    const { imageB64, mime, text } = extractImageFromCandidates(res.json);
 
-    // 5) Extraction de l’image générée
-    const parts = data?.candidates?.[0]?.content?.parts ?? [];
-    const imgPart = parts.find((p: any) => p?.inline_data);
+    if (!imageB64) {
+      // Trace serveur utile pour débogage
+      console.error(
+        '[FUSE_FACES] No image in response. Full response:',
+        JSON.stringify(res.json)
+      );
 
-    if (!imgPart) {
-      const txt = parts.find((p: any) => p?.text)?.text;
-      // Logs utiles côté serveur pour debug
-      console.error('[FUSE_FACES] No image in response. Full response:', JSON.stringify(data));
-      return {
-        error:
-          `No image in response (souvent un refus "Safety" pour les visages).` +
-          (txt ? ` Model said: ${txt}` : '')
-      };
+      // Cas fréquents : refus Safety, “I can only work with one image”, etc.
+      const tail =
+        text?.trim()
+          ? ` Model said: ${text.trim()}`
+          : '';
+      return { error: `No image in response.${tail}` };
     }
 
-    const mime = imgPart.inline_data.mime_type || 'image/png';
-    const b64 = imgPart.inline_data.data;
-
-    return { fusedImageUri: `data:${mime};base64,${b64}` };
+    const contentType = mime || 'image/png';
+    return { fusedImageUri: `data:${contentType};base64,${imageB64}` };
   } catch (e: any) {
     console.error('[FUSE_FACES] Unexpected error:', e);
     return { error: e?.message ?? 'Unknown error' };
