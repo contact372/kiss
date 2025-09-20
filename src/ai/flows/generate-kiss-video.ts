@@ -7,7 +7,7 @@ import { ai } from '@/ai/genkit';
 import { fuseFaces } from './fuse-faces';
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
 
-/** Tente de trouver un modèle *vidéo* (Veo) accessible à la clé et supportant la génération longue. */
+/** Tente de trouver un modèle *vidéo* accessible à la clé et supportant la génération longue. */
 async function pickVideoModel(apiKey: string): Promise<string | null> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
@@ -18,11 +18,9 @@ async function pickVideoModel(apiKey: string): Promise<string | null> {
   const list: Array<{ name: string; supportedGenerationMethods: string[] }> =
     data?.models ?? [];
 
-  // Cherche un modèle qui est (1) un modèle Veo et (2) supporte la méthode de génération vidéo.
-  const hit = list.find(
-    (m) =>
-      /veo/i.test(m.name) &&
-      m.supportedGenerationMethods.includes('predictLongRunning')
+  // Cherche un modèle qui supporte la méthode de génération vidéo, quel que soit son nom.
+  const hit = list.find((m) =>
+    m.supportedGenerationMethods.includes('predictLongRunning')
   );
 
   // Genkit attend le nom court (ex: 'veo-2') pour le préfixer avec 'googleai/'
@@ -96,7 +94,7 @@ export async function generateKissVideo(
     console.log('[MAIN_FLOW] Step 2 successful. Video generated.');
     return {
       videoUri: videoCandidate.media.url,
-      sourceImageUri: fusionResult.fusedImageUri, // Retourne l'image fusionnée au client
+      sourceImageUri: fusionResult.fusedImageUri,
     };
   } catch (err) {
     const errorMessage =
