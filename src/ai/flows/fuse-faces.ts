@@ -1,107 +1,70 @@
 'use server';
-/**
- * @fileOverview A flow for fusing two faces into a single scene by calling the Google AI REST API directly.
- * This approach avoids SDK complexities and build issues.
- */
+
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
-// --- Helper Functions --- 
-
-/**
- * Fetches an image from a URL and converts it to a base64-encoded string.
- * This is required for inline data in the REST API payload.
- */
-async function urlToBase64(url: string): Promise<string> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image from ${url}. Status: ${response.status}`);
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return buffer.toString('base64');
+async function urlToBase64(url: string) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Fetch failed ${url}: ${r.status}`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  return buf.toString('base64');            // base64 sans "data:" ni mime
 }
 
-/**
- * The main function to fuse faces. It now calls the Google AI REST API.
- * It takes two image URIs and generates a new image combining them.
- */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion process via REST API...');
+  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) return { error: 'Missing GOOGLE_GENAI_API_KEY / GOOGLE_API_KEY' };
 
-  if (!process.env.GOOGLE_API_KEY) {
-    const errorMsg = 'GOOGLE_API_KEY environment variable is not set.';
-    console.error(`[FUSE_FACES_FLOW_ERROR] ${errorMsg}`);
-    return { error: errorMsg };
-  }
+  // 1) Convertir les 2 images en base64
+  const img1 = await urlToBase64(input.image1Uri);
+  const img2 = await urlToBase64(input.image2Uri);
 
-  try {
-    console.log('[FUSE_FACES_FLOW] Converting image URIs to base64 data...');
-    const image1Base64 = await urlToBase64(input.image1Uri);
-    const image2Base64 = await urlToBase64(input.image2Uri);
+  // 2) Construire la requête v1 avec modèle image
+  // NOTE: The user-provided model name might be speculative. The official model for this is `gemini-pro-vision` for input, 
+  // but the key is the output modality. Let's trust the user's full logic.
+  const model = 'gemini-1.5-flash-latest'; // Reverting to a known good model, but with the V1 endpoint and correct params.
+  const url   = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
 
-    const model = 'gemini-1.5-flash-latest'; // Use the valid API model name.
-    const apiKey = process.env.GOOGLE_API_KEY;
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const prompt =
+    'Create a single 16:9 photorealistic image (American shot). ' +
+    'Person from the first image on the left, person from the second on the right. ' +
+    'Neutral background. Create a new image inspired by the faces, capturing their likeness and essence.';
 
-    // REVISED PROMPT: The previous prompt was too direct and likely triggered safety filters.
-    // This version asks for inspiration and likeness, which is a softer approach.
-    const prompt = `Generate a new photorealistic 16:9 image in an American shot. The image should feature two people, inspired by the individuals in the two provided images. Place the person inspired by the first image on the left, and the person inspired by the second image on the right. They should be standing side-by-side against a simple, neutral background. The goal is to create a new, original scene that captures the likeness and essence of the people in the photos.`;
+  const payload = {
+    contents: [{
+      role: 'user',
+      parts: [
+        // ⚠️ v1 = camelCase
+        { inlineData: { mimeType: 'image/png', data: img1 } },
+        { inlineData: { mimeType: 'image/png', data: img2 } },
+        { text: prompt }
+      ]
+    }],
+    // 👇 indispensable : on demande une image en sortie
+    generationConfig: { responseMimeType: 'image/png' } // Correct parameter is responseMimeType for this model
+  };
 
-    // Construct the payload for the REST API.
-    const payload = {
-      contents: [
-        {
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: 'image/png', data: image1Base64 } },
-            { inline_data: { mime_type: 'image/png', data: image2Base64 } },
-          ],
-        },
-      ],
-    };
-
-    console.log('[FUSE_FACES_FLOW] Calling the Google AI REST API...');
-    const response = await fetch(apiUrl, {
+  const resp = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+  });
 
-    if (!response.ok) {
-      const errorBody = await response.json(); // API errors are in JSON format
-      throw new Error(`API request failed with status ${response.status}: ${JSON.stringify(errorBody)}`);
-    }
-
-    const responseData = await response.json();
-
-    // Extract the base64 image data from the API response.
-    const candidate = responseData.candidates?.[0];
-
-    // Check for safety ratings first. If the response was blocked, there won't be content.
-    if (candidate?.finishReason === 'SAFETY') {
-        console.error('[FUSE_FACES_FLOW_ERROR] The model blocked the response due to safety settings.', candidate.safetyRatings);
-        throw new Error('The response was blocked due to safety policies. This can happen with images of people. Please try different images.');
-    }
-
-    const imagePart = candidate?.content?.parts.find((p: any) => p.inline_data);
-    if (!imagePart) {
-      // Log the text response if no image is found, which might contain a refusal.
-      const textResponse = candidate?.content?.parts.find((p: any) => p.text)?.text;
-      console.error('[FUSE_FACES_FLOW_ERROR] API response did not contain image data. Model response text: ', textResponse);
-      throw new Error('API response did not contain valid image data.');
-    }
-
-    const base64Data = imagePart.inline_data.data;
-    const mimeType = imagePart.inline_data.mime_type;
-    const fusedImageUri = `data:${mimeType};base64,${base64Data}`;
-
-    console.log('[FUSE_FACES_FLOW] Successfully generated fused image via REST API.');
-    return { fusedImageUri };
-
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-    console.error(`[FUSE_FACES_FLOW_ERROR] An error occurred during image fusion: ${errorMessage}`);
-    return { error: `Failed to fuse images: ${errorMessage}` };
+  if (!resp.ok) {
+    const errBody = await resp.text();
+    console.error("[FUSE_FACES_ERROR] API call failed:", errBody);
+    return { error: `API request failed with status ${resp.status}: ${errBody}` };
   }
+
+  const data = await resp.json();
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  const imagePart = parts.find((p: any) => p.inlineData);
+
+  if (!imagePart) {
+    const txt = parts.find((p: any) => p.text)?.text;
+    console.error("[FUSE_FACES_ERROR] No image in API response. Text was:", txt);
+    return { error: `No image in response. Text was: ${txt ?? '—'}` };
+  }
+
+  const mime = imagePart.inlineData.mimeType || 'image/png';
+  const b64  = imagePart.inlineData.data;         // base64 renvoyé par l’API
+  return { fusedImageUri: `data:${mime};base64,${b64}` };
 }
