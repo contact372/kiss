@@ -3,9 +3,9 @@
  * @fileOverview A multi-step flow that first fuses two images into one, 
  * then generates a video from that fused image.
  */
-import { ai } from '@/ai/genkit';
 import { fuseFaces } from './fuse-faces';
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types'; // Import types
+import { admin } from 'src/lib/firebase/firebase-admin';
 
 /**
  * A two-step flow to generate a video:
@@ -25,34 +25,60 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
   }
   console.log('[MAIN_FLOW] Step 1 successful. Fused image created.');
 
-  // STEP 2: Generate a video from the newly created scene
-  console.log('[MAIN_FLOW] Step 2: Animating the fused image...');
+  // STEP 2: Generate a video from the newly created scene using Pollo AI
+  console.log('[MAIN_FLOW] Step 2: Animating the fused image with Pollo AI...');
   try {
-    const { candidates } = await ai.generate({
-      model: 'googleai/veo-2',
-      prompt: [
-        { text: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.' },
-        { media: { url: fusionResult.fusedImageUri } }
-      ],
-      config: {
-        durationSeconds: 5,
-        aspectRatio: '16:9',
+    const url = 'https://pollo.ai/api/platform/generation/kling-ai/kling-v2-1';
+    // IMPORTANT: Replace with your actual Pollo AI API key
+    const apiKey = process.env.POLLO_API_KEY || '<your-pollo-api-key>';
+
+    const bucket = admin.storage().bucket();
+    const fileName = `fused-images/${Date.now()}.png`;
+    const file = bucket.file(fileName);
+    const buffer = Buffer.from(fusionResult.fusedImageUri.split(',')[1], 'base64');
+
+    await file.save(buffer, {
+      metadata: {
+        contentType: 'image/png',
       },
-      output: {
-        format: 'uri', // Ask Genkit to return a data URI directly
-      }
+      public: true,
     });
 
-    const videoCandidate = candidates[0];
+    const imageUrl = file.publicUrl();
 
-    if (!videoCandidate || !videoCandidate.media) {
-      console.error('[MAIN_FLOW_ERROR] Step 2 failed: Veo did not return a valid video candidate.');
-      return { error: 'Video animation failed to produce a result.' };
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'x-api-key': apiKey,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            input: {
+                image: imageUrl,
+                prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
+                negativePrompt: '',
+                strength: 50,
+                length: 5,
+                mode: 'std'
+            },
+            // You can optionally provide a webhook URL to be notified when the video is ready.
+            // webhookUrl: 'https://your-webhook-url.com/endpoint'
+        })
+    };
+
+    const response = await fetch(url, options);
+    const data = await response.json();
+
+    if (!response.ok) {
+        console.error('[MAIN_FLOW_ERROR] Step 2 failed: Pollo AI API returned an error.', data);
+        return { error: `Video animation failed: ${data.message || 'Unknown error'}` };
     }
 
-    console.log('[MAIN_FLOW] Step 2 successful. Video generated.');
+    console.log('[MAIN_FLOW] Step 2 successful. Video generation started with Pollo AI.');
     return {
-      videoUri: videoCandidate.media.url,
+      taskId: data.taskId,
+      status: data.status,
       sourceImageUri: fusionResult.fusedImageUri, // Pass the fused image back to the client
     };
 
