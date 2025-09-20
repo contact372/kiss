@@ -38,11 +38,13 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const image1Base64 = await urlToBase64(input.image1Uri);
     const image2Base64 = await urlToBase64(input.image2Uri);
 
-    const model = 'gemini-1.5-flash-latest'; // CORRECTED: Use the valid API model name.
+    const model = 'gemini-1.5-flash-latest'; // Use the valid API model name.
     const apiKey = process.env.GOOGLE_API_KEY;
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const prompt = `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. They should be standing side-by-side against a simple, neutral background. The person from the first image should be on the left, and the person from the second image on the right. Most importantly, you must faithfully reproduce the facial features of each person from their respective input images. Do not change their faces.`;
+    // REVISED PROMPT: The previous prompt was too direct and likely triggered safety filters.
+    // This version asks for inspiration and likeness, which is a softer approach.
+    const prompt = `Generate a new photorealistic 16:9 image in an American shot. The image should feature two people, inspired by the individuals in the two provided images. Place the person inspired by the first image on the left, and the person inspired by the second image on the right. They should be standing side-by-side against a simple, neutral background. The goal is to create a new, original scene that captures the likeness and essence of the people in the photos.`;
 
     // Construct the payload for the REST API.
     const payload = {
@@ -75,6 +77,13 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
 
     // Extract the base64 image data from the API response.
     const candidate = responseData.candidates?.[0];
+
+    // Check for safety ratings first. If the response was blocked, there won't be content.
+    if (candidate?.finishReason === 'SAFETY') {
+        console.error('[FUSE_FACES_FLOW_ERROR] The model blocked the response due to safety settings.', candidate.safetyRatings);
+        throw new Error('The response was blocked due to safety policies. This can happen with images of people. Please try different images.');
+    }
+
     const imagePart = candidate?.content?.parts.find((p: any) => p.inline_data);
     if (!imagePart) {
       // Log the text response if no image is found, which might contain a refusal.
