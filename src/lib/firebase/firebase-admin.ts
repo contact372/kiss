@@ -2,6 +2,7 @@
 import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp, type Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuth, type Auth as AdminAuth } from 'firebase-admin/auth';
+import { getStorage as getAdminStorage } from 'firebase-admin/storage';
 import type { UserProfile } from './types';
 import { firebaseConfig } from './config';
 
@@ -9,12 +10,14 @@ import { firebaseConfig } from './config';
 let adminApp: AdminApp;
 let adminAuth: AdminAuth;
 let adminDb: AdminFirestore;
+let adminStorage: any;
 
 console.log('[FIREBASE_ADMIN_LOG] Attempting to initialize Firebase Admin SDK...');
 try {
     if (getAdminApps().length === 0) {
         adminApp = initializeAdminApp({
             projectId: firebaseConfig.projectId,
+            storageBucket: firebaseConfig.storageBucket,
         });
         console.log(`[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
     } else {
@@ -24,7 +27,8 @@ try {
 
     adminAuth = getAdminAuth(adminApp);
     adminDb = getAdminFirestore(adminApp);
-    console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore) obtained successfully.');
+    adminStorage = getAdminStorage(adminApp);
+    console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore, Storage) obtained successfully.');
 
 } catch (e) {
     console.error('[FIREBASE_ADMIN_FATAL] CRITICAL: Failed to initialize Firebase Admin SDK. This will cause all server-side Firebase operations to fail.', e);
@@ -35,6 +39,7 @@ try {
 export const admin = {
   auth: adminAuth,
   db: adminDb,
+  storage: adminStorage,
   app: adminApp,
 };
 
