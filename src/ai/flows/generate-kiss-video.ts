@@ -15,24 +15,37 @@ import { admin } from '@/lib/firebase/firebase-admin';
 export async function generateKissVideo(input: GenerateKissVideoInput): Promise<GenerateKissVideoOutput> {
   console.log('[MAIN_FLOW] Starting two-step video generation process...');
 
-  // STEP 1: Fuse the two images into a single scene
+  // STEP 1: Fuse the two images with a retry mechanism
   console.log('[MAIN_FLOW] Step 1: Fusing faces...');
-  const fusionResult = await fuseFaces(input);
+  let fusionResult: Awaited<ReturnType<typeof fuseFaces>>;
+  const maxRetries = 3;
+  for (let i = 0; i < maxRetries; i++) {
+    fusionResult = await fuseFaces(input);
+    if (!fusionResult.error) {
+      break; // Success
+    }
+    console.warn(`[MAIN_FLOW] Image fusion attempt ${i + 1} failed. Retrying...`, fusionResult.error);
+    if (i === maxRetries - 1) {
+      console.error('[MAIN_FLOW_ERROR] Step 1 failed after all retries:', fusionResult.error);
+      return { error: `Failed during image fusion step after ${maxRetries} attempts: ${fusionResult.error}` };
+    }
+  }
 
   if (fusionResult.error || !fusionResult.fusedImageUri) {
-    console.error('[MAIN_FLOW_ERROR] Step 1 failed:', fusionResult.error);
-    return { error: `Failed during image fusion step: ${fusionResult.error}` };
+      console.error('[MAIN_FLOW_ERROR] Step 1 failed unexpectedly after retry loop.', fusionResult.error);
+      return { error: `Image fusion failed: ${fusionResult.error || 'Unknown error'}` };
   }
+
   console.log('[MAIN_FLOW] Step 1 successful. Fused image created.');
 
   // STEP 2: Generate a video from the newly created scene using Pollo AI
   console.log('[MAIN_FLOW] Step 2: Animating the fused image with Pollo AI...');
   try {
     const url = 'https://pollo.ai/api/platform/generation/kling-ai/kling-v2-1';
-    // IMPORTANT: Replace with your actual Pollo AI API key
     const apiKey = process.env.POLLO_API_KEY || '<your-pollo-api-key>';
 
-    const bucket = admin.storage().bucket();
+    // Corrected storage access
+    const bucket = admin.storage.bucket();
     const fileName = `fused-images/${Date.now()}.png`;
     const file = bucket.file(fileName);
     const buffer = Buffer.from(fusionResult.fusedImageUri.split(',')[1], 'base64');
@@ -45,7 +58,6 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     });
 
     const imageUrl = file.publicUrl();
-
 
     const options = {
         method: 'POST',
@@ -62,8 +74,6 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
                 length: 5,
                 mode: 'std'
             },
-            // You can optionally provide a webhook URL to be notified when the video is ready.
-            // webhookUrl: 'https://your-webhook-url.com/endpoint'
         })
     };
 
