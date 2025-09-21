@@ -60,6 +60,9 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
             input: {
                 image: imageUrl,
                 prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
+                strength: 50,
+                length: 5,
+                mode: 'std',
                 webhookUrl: webhookUrl, // Notify this URL when done
                 // Pass our internal generation ID to get it back in the webhook payload
                 passthrough: JSON.stringify({ generationId: generationId }), 
