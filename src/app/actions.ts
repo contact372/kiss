@@ -6,7 +6,6 @@ import { generateKissVideo } from '@/ai/flows/generate-kiss-video'; // Import th
 
 /**
  * Defines the input for the user-facing server action.
- * This is a type, not an exported object, so it's safe.
  */
 interface CreateKissVideoActionInput {
     userId: string;
@@ -15,10 +14,20 @@ interface CreateKissVideoActionInput {
 }
 
 /**
+ * Defines the output of a successful video generation task start.
+ */
+interface CreateKissVideoActionOutput {
+    taskId?: string;
+    status?: string;
+    sourceImageDataUri?: string;
+    error?: string;
+}
+
+/**
  * A server action that orchestrates the entire video generation process.
  * It validates the user, calls the AI flow, and decrements credits.
  */
-export async function createKissVideoAction(input: CreateKissVideoActionInput): Promise<{ videoDataUri?: string; sourceImageDataUri?: string; error?: string }> {
+export async function createKissVideoAction(input: CreateKissVideoActionInput): Promise<CreateKissVideoActionOutput> {
     console.log('[ACTION_START] createKissVideoAction invoked.');
     const { userId, image1DataUri, image2_data_uri } = input;
 
@@ -53,22 +62,24 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
             image2Uri: image2_data_uri,
         });
         
-        if (result.error || !result.videoUri) {
-            console.error('[ACTION_ERROR] Genkit flow failed:', result.error);
-            return { error: result.error || "Failed to generate video from the AI flow." };
+        // The flow is async. A success is when a `taskId` is returned.
+        if (result.error || !result.taskId) {
+            console.error('[ACTION_ERROR] Genkit flow failed to start video generation task:', result.error);
+            return { error: result.error || "Failed to start video generation from the AI flow." };
         }
         
         // 3. Decrement credits if the user is not subscribed
-        console.log('[ACTION_LOG] AI flow successful. Decrementing credits if applicable...');
+        console.log('[ACTION_LOG] AI flow task started successfully. Decrementing credits if applicable...');
         if (!userProfile.isSubscribed) {
             await decrementUserCreditsAdmin(userId);
             console.log(`[ACTION_LOG] Credits decremented for user ${userId}.`);
         }
 
-        // 4. Return the final data to the client
-        console.log('[ACTION_SUCCESS] createKissVideoAction completed successfully.');
+        // 4. Return the task data to the client
+        console.log('[ACTION_SUCCESS] createKissVideoAction completed successfully. Task started.');
         return {
-            videoDataUri: result.videoUri, 
+            taskId: result.taskId, 
+            status: result.status,
             sourceImageDataUri: result.sourceImageUri, // The fused image
         };
 
@@ -92,4 +103,3 @@ export async function decrementCreditsAction(userId: string): Promise<{ success:
         return { success: false, error: message };
     }
 }
-
