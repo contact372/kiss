@@ -44,7 +44,6 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     const url = 'https://pollo.ai/api/platform/generation/kling-ai/kling-v2-1';
     const apiKey = process.env.POLLO_API_KEY || '<your-pollo-api-key>';
 
-    // Corrected storage access
     const bucket = admin.storage.bucket();
     const fileName = `fused-images/${Date.now()}.png`;
     const file = bucket.file(fileName);
@@ -80,6 +79,9 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     const response = await fetch(url, options);
     const data = await response.json();
 
+    // Log the full response from Pollo AI for debugging
+    console.log('[MAIN_FLOW] Full response from Pollo AI:', JSON.stringify(data));
+
     if (!response.ok) {
         console.error('[MAIN_FLOW_ERROR] Step 2 failed: Pollo AI API returned an error.', data);
         return { error: `Video animation failed: ${data.message || 'Unknown error'}` };
@@ -87,7 +89,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
 
     console.log('[MAIN_FLOW] Step 2 successful. Video generation started with Pollo AI.');
     return {
-      taskId: data.taskId,
+      taskId: data.id, // Let's try `data.id` as it is a common alternative to `taskId`
       status: data.status,
       sourceImageUri: fusionResult.fusedImageUri, // Pass the fused image back to the client
     };
