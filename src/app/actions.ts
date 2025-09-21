@@ -7,7 +7,7 @@ import { generateKissVideo } from '@/ai/flows/generate-kiss-video'; // Import th
 /**
  * Defines the input for the user-facing server action.
  */
-interface CreateKissVideoActionInput {
+export interface CreateKissVideoActionInput {
     userId: string;
     image1DataUri: string;
     image2_data_uri: string;
@@ -16,10 +16,10 @@ interface CreateKissVideoActionInput {
 /**
  * Defines the output of a successful video generation task start.
  */
-interface CreateKissVideoActionOutput {
-    taskId?: string;
+export interface CreateKissVideoActionOutput {
+    generationId?: string; // Corrected from taskId to generationId
     status?: string;
-    sourceImageDataUri?: string;
+    sourceImageUri?: string;
     error?: string;
 }
 
@@ -55,15 +55,16 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
             return { error: "You do not have enough credits to generate a video." };
         }
 
-        // 2. Call the new, two-step AI flow
+        // 2. Call the new, two-step AI flow, NOW PASSING THE USER ID
         console.log('[ACTION_LOG] Starting Genkit video generation flow...');
         const result = await generateKissVideo({
+            userId: userId, // CORRECT: Pass the userId to the flow
             image1Uri: image1DataUri,
             image2Uri: image2_data_uri,
         });
         
-        // The flow is async. A success is when a `taskId` is returned.
-        if (result.error || !result.taskId) {
+        // The flow is async. A success is when a `generationId` is returned.
+        if (result.error || !result.generationId) {
             console.error('[ACTION_ERROR] Genkit flow failed to start video generation task:', result.error);
             return { error: result.error || "Failed to start video generation from the AI flow." };
         }
@@ -78,9 +79,9 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
         // 4. Return the task data to the client
         console.log('[ACTION_SUCCESS] createKissVideoAction completed successfully. Task started.');
         return {
-            taskId: result.taskId, 
+            generationId: result.generationId, // Pass back the correct ID
             status: result.status,
-            sourceImageDataUri: result.sourceImageUri, // The fused image
+            sourceImageUri: result.sourceImageUri, // The fused image
         };
 
     } catch (e) {
