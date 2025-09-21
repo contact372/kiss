@@ -6,41 +6,43 @@ import { getStorage as getAdminStorage } from 'firebase-admin/storage';
 import type { UserProfile } from './types';
 import { firebaseConfig } from './config';
 
-
 let adminApp: AdminApp;
 let adminAuth: AdminAuth;
 let adminDb: AdminFirestore;
 let adminStorage: any;
 
-console.log('[FIREBASE_ADMIN_LOG] Attempting to initialize Firebase Admin SDK...');
-try {
-    if (getAdminApps().length === 0) {
-        adminApp = initializeAdminApp({
-            projectId: firebaseConfig.projectId,
-            storageBucket: firebaseConfig.storageBucket,
-        });
-        console.log(`[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
-    } else {
-        adminApp = getAdminApps()[0];
-        console.log('[FIREBASE_ADMIN_LOG] Reusing existing Firebase Admin SDK instance.');
-    }
-
-    adminAuth = getAdminAuth(adminApp);
-    adminDb = getAdminFirestore(adminApp);
-    adminStorage = getAdminStorage(adminApp);
-    console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore, Storage) obtained successfully.');
-
-} catch (e) {
-    console.error('[FIREBASE_ADMIN_FATAL] CRITICAL: Failed to initialize Firebase Admin SDK. This will cause all server-side Firebase operations to fail.', e);
-    // We don't throw here to allow the server to start, but errors will occur.
+// This is the recommended approach to handle re-initialization in serverless environments
+if (getAdminApps().length === 0) {
+    console.log('[FIREBASE_ADMIN_LOG] Initializing a new Firebase Admin SDK instance...');
+    adminApp = initializeAdminApp({
+        projectId: firebaseConfig.projectId,
+        storageBucket: firebaseConfig.storageBucket,
+    });
+} else {
+    console.log('[FIREBASE_ADMIN_LOG] Reusing existing Firebase Admin SDK instance.');
+    adminApp = getAdminApps()[0];
 }
 
+adminAuth = getAdminAuth(adminApp);
+adminDb = getAdminFirestore(adminApp);
+adminStorage = getAdminStorage(adminApp);
+console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore, Storage) obtained successfully.');
 
+/**
+ * A singleton object for accessing Firebase Admin services.
+ * This now includes Firestore-specific utilities like FieldValue.
+ */
 export const admin = {
   auth: adminAuth,
   db: adminDb,
   storage: adminStorage,
   app: adminApp,
+  // By exporting FieldValue here, any part of the app that imports `admin`
+  // can safely use `admin.firestore.FieldValue` without causing an error.
+  firestore: {
+      FieldValue,
+      Timestamp,
+  }
 };
 
 // Server-side database functions using Admin SDK
@@ -56,9 +58,6 @@ export async function activateUserSubscriptionAdmin(uid: string) {
     try {
         await adminDb.runTransaction(async (transaction) => {
             const userDoc = await transaction.get(userRef);
-            
-            // It's safer to get user email from the client or another trusted source if needed.
-            // For now, we assume the user profile might be new.
             
             if (!userDoc.exists) {
                 console.log(`[FIREBASE_ADMIN] User document for UID ${uid} does not exist. Creating new profile.`);
@@ -79,13 +78,12 @@ export async function activateUserSubscriptionAdmin(uid: string) {
             const data = userDoc.data() as UserProfile;
             const updateData: Partial<UserProfile> = {
                 isSubscribed: true,
-                subscriptionEndDate: null, // Clear any previous cancellation date
+                subscriptionEndDate: null,
             };
 
-            // CRITICAL: This is the definitive check to prevent double-crediting.
             if (!data.creditsGranted) {
                 updateData.credits = (data.credits || 0) + 15;
-                updateData.creditsGranted = true; // Set the flag to true
+                updateData.creditsGranted = true;
                 console.log(`[FIREBASE_ADMIN] Granting 15 credits to UID: ${uid}.`);
             } else {
                 console.log(`[FIREBASE_ADMIN] Credits already granted for UID: ${uid}. Only updating subscription status.`);
@@ -112,10 +110,9 @@ export async function cancelUserSubscriptionAdmin(uid: string, endsAt: string, e
         subscriptionEndDate: Timestamp.fromDate(new Date(endsAt)),
     };
 
-    // When the subscription officially ends (not just cancelled), reset their status and ability to get new credits.
     if (ended) {
         updateData.isSubscribed = false;
-        updateData.creditsGranted = false; // Reset the flag so they can get credits if they re-subscribe.
+        updateData.creditsGranted = false;
     }
     
     console.log(`[FIREBASE_ADMIN] Updating subscription cancellation for UID: ${uid}`, updateData);
@@ -153,6 +150,6 @@ export async function decrementUserCreditsAdmin(uid: string) {
         });
     } catch (error) {
         console.error(`[FIREBASE_ADMIN_FATAL] Transaction failed for decrementing credits for UID ${uid}:`, error);
-        throw error; // Re-throw the error to be caught by the calling action.
+        throw error;
     }
 }
