@@ -79,7 +79,6 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     const response = await fetch(url, options);
     const data = await response.json();
 
-    // Log the full response from Pollo AI for debugging
     console.log('[MAIN_FLOW] Full response from Pollo AI:', JSON.stringify(data));
 
     if (!response.ok) {
@@ -88,10 +87,11 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     }
 
     console.log('[MAIN_FLOW] Step 2 successful. Video generation started with Pollo AI.');
+    // Correctly access the nested taskId and status from the `data` object
     return {
-      taskId: data.id, // Let's try `data.id` as it is a common alternative to `taskId`
-      status: data.status,
-      sourceImageUri: fusionResult.fusedImageUri, // Pass the fused image back to the client
+      taskId: data.data.taskId,
+      status: data.data.status,
+      sourceImageUri: fusionResult.fusedImageUri,
     };
 
   } catch (err) {
