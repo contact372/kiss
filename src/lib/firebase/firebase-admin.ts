@@ -16,7 +16,9 @@ try {
     if (getAdminApps().length === 0) {
         adminApp = initializeAdminApp({
             projectId: firebaseConfig.projectId,
-            storageBucket: `${firebaseConfig.projectId}.appspot.com`
+            // *** THE REAL FIX ***
+            // Use the storageBucket from the config, don't construct it manually.
+            storageBucket: firebaseConfig.storageBucket 
         });
         console.log(`[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
     } else {
@@ -41,7 +43,6 @@ export const admin = {
   app: adminApp,
 };
 
-// The rest of the file remains unchanged...
 
 export async function activateUserSubscriptionAdmin(uid: string) {
     if (!uid) {
