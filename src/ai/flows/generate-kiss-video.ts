@@ -3,9 +3,10 @@
  * @fileOverview A multi-step flow that first fuses two images into one, 
  * then generates a video from that fused image, managing state via Firestore.
  */
-import { fuseFaces } from './fuse-faces'; // Corrected import path based on actual file structure
+import { fuseFaces } from './fuse-faces'; 
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
 import { admin } from '@/lib/firebase/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore'; // <<< THE FIX: Import FieldValue directly.
 
 /**
  * A two-step flow to generate a video:
@@ -47,7 +48,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
         id: generationId,
         userId: input.userId, 
         status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(), // <<< THE FIX: Use FieldValue directly.
         sourceImageUrl: imageUrl,
     });
     console.log(`[MAIN_FLOW] Created tracking document in Firestore with ID: ${generationId}`);
