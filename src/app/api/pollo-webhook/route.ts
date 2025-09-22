@@ -1,4 +1,3 @@
-
 'use server';
 import { admin } from '@/lib/firebase/firebase-admin';
 import { NextResponse } from 'next/server';
@@ -42,7 +41,7 @@ export async function POST(req: Request) {
 
     // 3. **CORRECTION**: Get our internal ID from the 'passthrough' field
     if (!event.passthrough) {
-        console.error('[WEBHOOK_ERROR] Invalid payload: Missing 'passthrough' field.');
+        console.error('[WEBHOOK_ERROR] Invalid payload: Missing \'passthrough\' field.');
         return NextResponse.json({ error: 'Invalid payload: missing passthrough' }, { status: 400 });
     }
 
@@ -50,13 +49,13 @@ export async function POST(req: Request) {
     const { generationId } = passthrough;
 
     if (!generationId) {
-        console.error('[WEBHOOK_ERROR] Invalid passthrough data: Missing 'generationId'.');
+        console.error('[WEBHOOK_ERROR] Invalid passthrough data: Missing \'generationId\'.');
         return NextResponse.json({ error: 'Invalid passthrough data' }, { status: 400 });
     }
 
     // 4. Use the correct internal `generationId` to update the document
     const docRef = admin.db.collection('videoGenerations').doc(generationId);
-    const { status, taskId } = event;
+    const { status } = event;
 
     await docRef.update({
       status: status, // 'succeed' or 'failed'
