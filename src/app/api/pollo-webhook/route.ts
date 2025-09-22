@@ -1,4 +1,4 @@
-'''
+
 'use server';
 import { admin } from '@/lib/firebase/firebase-admin';
 import { NextResponse } from 'next/server';
@@ -73,4 +73,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }
-'''
