@@ -1,10 +1,9 @@
-
 'use server';
 /**
  * @fileOverview A multi-step flow that first fuses two images into one, 
  * then generates a video from that fused image, managing state via Firestore.
  */
-import { fuseFaces } from './fuse-faces';
+import { fuseFaces } from '../tools/fuse-faces'; // Corrected import path
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
 import { admin } from '@/lib/firebase/firebase-admin';
 
@@ -18,7 +17,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
 
   // STEP 1: Fuse the two images
   console.log('[MAIN_FLOW] Step 1: Fusing faces...');
-  const fusionResult = await fuseFaces(input);
+  const fusionResult = await fuseFaces({ image1Uri: input.image1Uri, image2Uri: input.image2Uri });
 
   if (fusionResult.error || !fusionResult.fusedImageUri) {
       console.error('[MAIN_FLOW_ERROR] Step 1 failed unexpectedly.', fusionResult.error);
@@ -46,7 +45,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
 
     await generationDocRef.set({
         id: generationId,
-        userId: input.userId,
+        userId: input.userId, // This was already correct in your code!
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         sourceImageUrl: imageUrl,
@@ -62,12 +61,15 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            // CORRECTED STRUCTURE: webhookUrl and passthrough are top-level properties
             webhookUrl: webhookUrl,
             passthrough: JSON.stringify({ generationId: generationId }), 
             input: {
                 image: imageUrl, 
                 prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
+                strength: 50,
+                length: 5,
+                mode: 'std',
+
             },
         })
     };
@@ -88,6 +90,9 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     });
 
     console.log(`[MAIN_FLOW] Task successfully submitted to Pollo AI. External Task ID: ${externalTaskId}`);
+    
+    // *** THE CRITICAL FIX IS HERE ***
+    // We must return the generationId to the caller
     return {
       generationId: generationId,
       status: 'processing',
@@ -101,4 +106,3 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     return { error: `Failed to animate the image: ${errorMessage}` };
   }
 }
-
