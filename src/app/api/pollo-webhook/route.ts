@@ -4,14 +4,9 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
 
-/**
- * This is the webhook endpoint that Pollo AI will call.
- * It verifies the request and updates the Firestore document with the task status.
- */
 export async function POST(req: Request) {
   const headersList = headers();
 
-  // 1. Get headers
   const webhookId = headersList.get('x-webhook-id');
   const webhookTimestamp = headersList.get('x-webhook-timestamp');
   const signatureFromHeader = headersList.get('x-webhook-signature');
@@ -24,7 +19,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    // 2. Verify signature
     const body = await req.text();
     const signedContent = `${webhookId}.${webhookTimestamp}.${body}`;
     const secretBytes = Buffer.from(webhookSecret, 'base64');
@@ -35,35 +29,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // --- Signature is valid, process the event ---
     console.log('[WEBHOOK] Received verified payload from Pollo AI:', body);
     const event = JSON.parse(body);
+    const { taskId, status } = event;
 
-    // 3. **CORRECTION**: Get our internal ID from the 'passthrough' field
-    if (!event.passthrough) {
-        console.error('[WEBHOOK_ERROR] Invalid payload: Missing \'passthrough\' field.');
-        return NextResponse.json({ error: 'Invalid payload: missing passthrough' }, { status: 400 });
+    if (!taskId) {
+        console.error('[WEBHOOK_ERROR] Invalid payload: Missing \'taskId\' field.');
+        return NextResponse.json({ error: 'Invalid payload: missing taskId' }, { status: 400 });
     }
 
-    const passthrough = JSON.parse(event.passthrough);
-    const { generationId } = passthrough;
+    // Find the document by querying for the `externalTaskId`
+    const videoGenerationsRef = admin.db.collection('videoGenerations');
+    const q = videoGenerationsRef.where('externalTaskId', '==', taskId).limit(1);
+    const querySnapshot = await q.get();
 
-    if (!generationId) {
-        console.error('[WEBHOOK_ERROR] Invalid passthrough data: Missing \'generationId\'.');
-        return NextResponse.json({ error: 'Invalid passthrough data' }, { status: 400 });
+    if (querySnapshot.empty) {
+        console.error(`[WEBHOOK_ERROR] No matching document found for externalTaskId: ${taskId}`);
+        // Still return 200 so Pollo doesn't retry. The job might be old or deleted.
+        return NextResponse.json({ success: true, message: 'No matching task found.' });
     }
 
-    // 4. Use the correct internal `generationId` to update the document
-    const docRef = admin.db.collection('videoGenerations').doc(generationId);
-    const { status } = event;
+    // Update the found document
+    const doc = querySnapshot.docs[0];
+    const videoUrl = event.generations?.[0]?.url; // Safely access the video URL
 
-    await docRef.update({
+    await doc.ref.update({
       status: status, // 'succeed' or 'failed'
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       webhookPayload: event, // Store the full payload for debugging
+      ...(videoUrl && { videoUrl: videoUrl }), // Add the videoUrl if it exists
     });
 
-    console.log(`[WEBHOOK] Successfully updated status for internal task ${generationId} to ${status}.`);
+    console.log(`[WEBHOOK] Successfully updated status for internal task ${doc.id} to ${status}.`);
     return NextResponse.json({ success: true });
 
   } catch (error) {
