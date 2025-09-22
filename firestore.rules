@@ -2,27 +2,22 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid} {
-      // Allow users to read their own profile.
-      allow read: if request.auth != null && request.auth.uid == uid;
-
-      // Allow users to create their own profile upon signup.
-      // They cannot grant themselves sensitive permissions on creation.
-      allow create: if request.auth != null 
-        && request.auth.uid == uid
-        && !('isSubscribed' in request.resource.data)
-        && !('credits' in request.resource.data)
-        && !('creditsGranted' in request.resource.data)
-        && !('subscriptionEndDate' in request.resource.data);
-      
-      // Allow users to update non-sensitive fields.
-      // This rule allows the client to perform the initial "paid access" grant
-      // but prevents them from modifying it later or changing other sensitive fields.
-      allow update: if request.auth != null
-        && request.auth.uid == uid
-        && !(request.resource.data.diff(resource.data).affectedKeys()
-              .hasAny(['uid', 'createdAt'])); // Cannot change immutable fields
+    
+    // Règle pour les profils utilisateurs
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth.uid == userId;
     }
 
+    // Règle pour les générations de vidéos
+    match /videoGenerations/{generationId} {
+      // Tout utilisateur authentifié peut créer un document de génération.
+      allow create: if request.auth != null;
+      
+      // Seul l'utilisateur qui a créé la génération (dont l'ID est dans `userId`)
+      // est autorisé à lire le document complet (y compris le champ `videoUrl`)
+      // ou à le mettre à jour.
+      allow read, update: if request.auth.uid == resource.data.userId;
+    }
   }
 }
