@@ -1,23 +1,21 @@
-'use server';
 // src/lib/firebase/firebase-admin.ts
 import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp, type Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuth, type Auth as AdminAuth } from 'firebase-admin/auth';
-import { getStorage as getAdminStorage, type Storage as AdminStorage } from 'firebase-admin/storage'; // <<< FIX 1: IMPORT STORAGE
+import { getStorage as getAdminStorage, type Storage as AdminStorage } from 'firebase-admin/storage';
 import type { UserProfile } from './types';
 import { firebaseConfig } from './config';
 
 let adminApp: AdminApp;
 let adminAuth: AdminAuth;
 let adminDb: AdminFirestore;
-let adminStorage: AdminStorage; // <<< FIX 2: DECLARE STORAGE VARIABLE
+let adminStorage: AdminStorage;
 
 console.log('[FIREBASE_ADMIN_LOG] Attempting to initialize Firebase Admin SDK...');
 try {
     if (getAdminApps().length === 0) {
         adminApp = initializeAdminApp({
             projectId: firebaseConfig.projectId,
-            // Required for Storage: specify the bucket name
             storageBucket: `${firebaseConfig.projectId}.appspot.com`
         });
         console.log(`[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
@@ -28,7 +26,7 @@ try {
 
     adminAuth = getAdminAuth(adminApp);
     adminDb = getAdminFirestore(adminApp);
-    adminStorage = getAdminStorage(adminApp); // <<< FIX 3: INITIALIZE STORAGE
+    adminStorage = getAdminStorage(adminApp);
 
     console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore, Storage) obtained successfully.');
 
@@ -36,7 +34,6 @@ try {
     console.error('[FIREBASE_ADMIN_FATAL] CRITICAL: Failed to initialize Firebase Admin SDK.', e);
 }
 
-// <<< FIX 4: EXPORT STORAGE
 export const admin = {
   auth: adminAuth,
   db: adminDb,
