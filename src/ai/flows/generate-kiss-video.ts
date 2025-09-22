@@ -1,4 +1,4 @@
-'''
+
 'use server';
 /**
  * @fileOverview A multi-step flow that first fuses two images into one, 
@@ -101,4 +101,4 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     return { error: `Failed to animate the image: ${errorMessage}` };
   }
 }
-'''
+
