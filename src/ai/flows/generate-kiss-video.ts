@@ -3,7 +3,7 @@
  * @fileOverview A multi-step flow that first fuses two images into one, 
  * then generates a video from that fused image, managing state via Firestore.
  */
-import { fuseFaces } from '../tools/fuse-faces'; // Corrected import path
+import { fuseFaces } from './fuse-faces'; // Corrected import path based on actual file structure
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
 import { admin } from '@/lib/firebase/firebase-admin';
 
@@ -45,7 +45,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
 
     await generationDocRef.set({
         id: generationId,
-        userId: input.userId, // This was already correct in your code!
+        userId: input.userId, 
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         sourceImageUrl: imageUrl,
@@ -66,10 +66,6 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
             input: {
                 image: imageUrl, 
                 prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
-                strength: 50,
-                length: 5,
-                mode: 'std',
-
             },
         })
     };
@@ -91,8 +87,6 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
 
     console.log(`[MAIN_FLOW] Task successfully submitted to Pollo AI. External Task ID: ${externalTaskId}`);
     
-    // *** THE CRITICAL FIX IS HERE ***
-    // We must return the generationId to the caller
     return {
       generationId: generationId,
       status: 'processing',
