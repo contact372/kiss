@@ -1,4 +1,4 @@
-
+'''
 'use server';
 import { admin } from '@/lib/firebase/firebase-admin';
 import { NextResponse } from 'next/server';
@@ -12,42 +12,26 @@ import crypto from 'crypto';
 export async function POST(req: Request) {
   const headersList = headers();
 
-  // 1. Get headers from Pollo AI request
+  // 1. Get headers
   const webhookId = headersList.get('x-webhook-id');
   const webhookTimestamp = headersList.get('x-webhook-timestamp');
   const signatureFromHeader = headersList.get('x-webhook-signature');
-
-  // 2. Get the secret from environment variables
   const webhookSecret = process.env.POLLO_WEBHOOK_SECRET;
 
-  if (!webhookId || !webhookTimestamp || !signatureFromHeader) {
-    return NextResponse.json({ error: 'Missing required webhook headers.' }, { status: 400 });
-  }
-
-  if (!webhookSecret) {
-    console.error('[WEBHOOK_ERROR] POLLO_WEBHOOK_SECRET is not set.');
-    return NextResponse.json({ error: 'Internal server configuration error.' }, { status: 500 });
+  if (!webhookId || !webhookTimestamp || !signatureFromHeader || !webhookSecret) {
+    const missing = [!webhookId && 'id', !webhookTimestamp && 'timestamp', !signatureFromHeader && 'signature', !webhookSecret && 'secret'].filter(Boolean).join(', ');
+    console.error(`[WEBHOOK_ERROR] Missing required config or headers: ${missing}.`);
+    return NextResponse.json({ error: 'Configuration or header error.' }, { status: 400 });
   }
 
   try {
-    // 3. Get the raw request body
+    // 2. Verify signature
     const body = await req.text();
-
-    // 4. Calculate the signature (as per Pollo AI docs)
     const signedContent = `${webhookId}.${webhookTimestamp}.${body}`;
     const secretBytes = Buffer.from(webhookSecret, 'base64');
-    const computedSignature = crypto
-      .createHmac('sha256', secretBytes)
-      .update(signedContent)
-      .digest('base64');
+    const computedSignature = crypto.createHmac('sha256', secretBytes).update(signedContent).digest('base64');
 
-    // 5. Securely compare the signatures
-    const isSignatureValid = crypto.timingSafeEqual(
-        Buffer.from(signatureFromHeader, 'base64'),
-        Buffer.from(computedSignature, 'base64')
-    );
-
-    if (!isSignatureValid) {
+    if (!crypto.timingSafeEqual(Buffer.from(signatureFromHeader, 'base64'), Buffer.from(computedSignature, 'base64'))) {
       console.warn('[WEBHOOK_WARN] Invalid signature attempt detected.');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -55,18 +39,24 @@ export async function POST(req: Request) {
     // --- Signature is valid, process the event ---
     console.log('[WEBHOOK] Received verified payload from Pollo AI:', body);
     const event = JSON.parse(body);
-    const { taskId, status } = event;
 
-    if (!taskId) {
-        console.error('[WEBHOOK_ERROR] Invalid payload. Missing taskId.');
-        return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    // 3. **CORRECTION**: Get our internal ID from the 'passthrough' field
+    if (!event.passthrough) {
+        console.error('[WEBHOOK_ERROR] Invalid payload: Missing 'passthrough' field.');
+        return NextResponse.json({ error: 'Invalid payload: missing passthrough' }, { status: 400 });
     }
-    
-    // IMPORTANT: The payload only gives us a status, not the video URL.
-    // We will update the status in Firestore.
-    // You might need a separate process to fetch the final URL using the taskId.
 
-    const docRef = admin.db.collection('videoGenerations').doc(taskId);
+    const passthrough = JSON.parse(event.passthrough);
+    const { generationId } = passthrough;
+
+    if (!generationId) {
+        console.error('[WEBHOOK_ERROR] Invalid passthrough data: Missing 'generationId'.');
+        return NextResponse.json({ error: 'Invalid passthrough data' }, { status: 400 });
+    }
+
+    // 4. Use the correct internal `generationId` to update the document
+    const docRef = admin.db.collection('videoGenerations').doc(generationId);
+    const { status, taskId } = event;
 
     await docRef.update({
       status: status, // 'succeed' or 'failed'
@@ -74,7 +64,7 @@ export async function POST(req: Request) {
       webhookPayload: event, // Store the full payload for debugging
     });
 
-    console.log(`[WEBHOOK] Successfully updated status for task ${taskId} to ${status}.`);
+    console.log(`[WEBHOOK] Successfully updated status for internal task ${generationId} to ${status}.`);
     return NextResponse.json({ success: true });
 
   } catch (error) {
@@ -83,3 +73,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }
+'''
