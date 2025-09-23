@@ -3,7 +3,7 @@
  * @fileOverview A flow for fusing two faces into a single scene using an image generation model.
  */
 import { ai } from '@/ai/genkit';
-import { FuseFacesInput, FuseFacesOutput } from './types'; // Import types
+import { FuseFacesInput, FuseFacesOutput } from './types';
 
 /**
  * Takes two images, each with a face, and generates a new image
@@ -13,38 +13,31 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
   console.log('[FUSE_FACES_FLOW] Starting image fusion process with new model...');
 
   try {
-    // The new model expects raw base64 data, not the full data URI.
-    const base64Image1 = input.image1Uri.split(',')[1];
-    const base64Image2 = input.image2Uri.split(',')[1];
-
-    if (!base64Image1 || !base64Image2) {
+    if (!input.image1Uri || !input.image2Uri) {
       console.error('[FUSE_FACES_FLOW_ERROR] Invalid image format. Expected two data URIs.');
       return { error: 'Image fusion failed: One or more images were missing or invalid.' };
     }
 
+    // The genkit abstraction can handle data URIs directly. We don't need to manually extract the base64 data.
     const { candidates } = await ai.generate({
+      // 1. Use the new, more powerful model.
       model: 'googleai/gemini-2.5-flash-image-preview',
       
-      // FIX: Use the exact prompt structure from the documentation.
+      // 2. Use the new, more detailed prompt.
       prompt: [
-        {
-          inlineData: {
-            mimeType: 'image/png',
-            data: base64Image1, // Pass the base64 string directly
-          },
-        },
-        {
-          inlineData: {
-            mimeType: 'image/png',
-            data: base64Image2, // Pass the base64 string directly
-          },
-        },
         {
           text: "From these two face images, create a picture where the two people are placed side by side, facing forward, in a horizontal 9:16 image, captured in a close-up/chest-up shot, with a simple background — while preserving the fidelity of their faces.",
         },
       ],
+
+      // 3. Use the original, correct structure that genkit understands, passing the full data URIs.
+      media: [
+        { url: input.image1Uri },
+        { url: input.image2Uri },
+      ],
+      
       output: {
-        format: 'uri', // Continue to request a data URI as output.
+        format: 'uri', // The output should still be a data URI.
       },
     });
 
