@@ -6,7 +6,7 @@
 import { fuseFaces } from './fuse-faces'; 
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
 import { admin } from '@/lib/firebase/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore'; // <<< THE FIX: Import FieldValue directly.
+import { FieldValue } from 'firebase-admin/firestore';
 
 /**
  * A two-step flow to generate a video:
@@ -40,7 +40,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     const buffer = Buffer.from(fusionResult.fusedImageUri.split(',')[1], 'base64');
     await file.save(buffer, { metadata: { contentType: 'image/png' } });
     await file.makePublic();
-    const imageUrl = file.publicUrl();
+    const imageUrl = file.publicUrl(); // This is the public URL we need.
 
     console.log(`[MAIN_FLOW] Fused image uploaded to Storage: ${imageUrl}`);
 
@@ -48,8 +48,8 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
         id: generationId,
         userId: input.userId, 
         status: 'pending',
-        createdAt: FieldValue.serverTimestamp(), // <<< THE FIX: Use FieldValue directly.
-        sourceImageUrl: imageUrl,
+        createdAt: FieldValue.serverTimestamp(),
+        sourceImageUrl: imageUrl, // The public URL is correctly saved here.
     });
     console.log(`[MAIN_FLOW] Created tracking document in Firestore with ID: ${generationId}`);
 
@@ -88,10 +88,11 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
 
     console.log(`[MAIN_FLOW] Task successfully submitted to Pollo AI. External Task ID: ${externalTaskId}`);
     
+    // THE FINAL, CORRECT FIX: Return the public URL, not the base64 data URI.
     return {
       generationId: generationId,
       status: 'processing',
-      sourceImageUri: fusionResult.fusedImageUri,
+      sourceImageUri: imageUrl,
     };
 
   } catch (err) {
