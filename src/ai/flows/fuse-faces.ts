@@ -10,7 +10,7 @@ import { FuseFacesInput, FuseFacesOutput } from './types';
  * that combines both people side-by-side in a new scene.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion process with new model...');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion process with final correct structure...');
 
   try {
     if (!input.image1Uri || !input.image2Uri) {
@@ -18,22 +18,18 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
       return { error: 'Image fusion failed: One or more images were missing or invalid.' };
     }
 
-    // The genkit abstraction can handle data URIs directly. We don't need to manually extract the base64 data.
     const { candidates } = await ai.generate({
       // 1. Use the new, more powerful model.
       model: 'googleai/gemini-2.5-flash-image-preview',
       
-      // 2. Use the new, more detailed prompt.
+      // 2. Use the correct structure for Gemini models via genkit:
+      // A single 'prompt' array containing all parts (text and media).
       prompt: [
-        {
-          text: "From these two face images, create a picture where the two people are placed side by side, facing forward, in a horizontal 9:16 image, captured in a close-up/chest-up shot, with a simple background — while preserving the fidelity of their faces.",
+        { 
+          text: "From these two face images, create a picture where the two people are placed side by side, facing forward, in a horizontal 9:16 image, captured in a close-up/chest-up shot, with a simple background — while preserving the fidelity of their faces." 
         },
-      ],
-
-      // 3. Use the original, correct structure that genkit understands, passing the full data URIs.
-      media: [
-        { url: input.image1Uri },
-        { url: input.image2Uri },
+        { media: { url: input.image1Uri } },
+        { media: { url: input.image2Uri } },
       ],
       
       output: {
