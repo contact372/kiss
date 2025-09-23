@@ -10,10 +10,10 @@ interface CreateKissVideoActionInput {
     image2_data_uri: string;
 }
 
-// The output of the action now includes the generationId
+// FIX: The output property name is changed to match what the client (page.tsx) expects.
 interface CreateKissVideoActionOutput {
     generationId?: string;
-    sourceImageDataUri?: string;
+    sourceImageUrl?: string; // Changed from sourceImageDataUri
     error?: string;
 }
 
@@ -53,7 +53,6 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
             image2Uri: image2_data_uri,
         });
         
-        // The flow now returns a generationId
         if (result.error || !result.generationId) {
             console.error('[ACTION_ERROR] Main flow failed:', result.error);
             return { error: result.error || "Failed to get a generation ID from the main flow." };
@@ -66,11 +65,11 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
             console.log(`[ACTION_LOG] Credits decremented for user ${userId}.`);
         }
 
-        // 4. Return the generationId to the client for tracking
+        // 4. Return the generationId and the correct property name to the client.
         console.log('[ACTION_SUCCESS] createKissVideoAction completed successfully. Task started.');
         return {
             generationId: result.generationId, 
-            sourceImageDataUri: result.sourceImageUri,
+            sourceImageUrl: result.sourceImageUri, // FIX: The property name is now sourceImageUrl
         };
 
     } catch (e) {
