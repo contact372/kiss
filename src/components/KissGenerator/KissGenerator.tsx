@@ -1,12 +1,22 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/db';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Download, Repeat } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Download, Repeat } from 'lucide-react';
+
+type VideoDoc = {
+  status: 'pending' | 'processing' | 'succeed' | 'failed' | string;
+  videoUrl?: string;
+  webhookPayload?: {
+    generations?: Array<{ url?: string }>;
+    status?: string;
+  };
+  error?: string;
+};
 
 interface KissGeneratorProps {
   generationId: string | null;
@@ -15,52 +25,68 @@ interface KissGeneratorProps {
 }
 
 export default function KissGenerator({ generationId, sourceImageUri, onReset }: KissGeneratorProps) {
-  const [videoDoc, setVideoDoc] = useState<any>(null);
+  const [videoDoc, setVideoDoc] = useState<VideoDoc | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Effect 1: Listen to Firestore and update the local state `videoDoc`
+  // -------- 1) Connect the Firestore listener, ONLY responsible for setVideoDoc ----------
   useEffect(() => {
     if (!generationId) {
-      return; // Do nothing if there's no ID
-    }
-
-    console.log(`[CLIENT] Starting Firestore listener for: videoGenerations/${generationId}`);
-    const unsubscribe = onSnapshot(
-      doc(db, 'videoGenerations', generationId),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          console.log('[CLIENT] Received Firestore update:', docSnap.data());
-          setVideoDoc(docSnap.data()); // The ONLY job of this listener is to update the state
-        } else {
-          console.error('[CLIENT] Document does not exist.');
-          setError('The generation task could not be found.');
-        }
-      },
-      (err) => {
-        console.error('[CLIENT] Firestore snapshot listener error:', err);
-        setError('Error connecting to the database for real-time updates.');
-      }
-    );
-
-    // Cleanup function to stop listening when the component unmounts
-    return () => {
-      console.log(`[CLIENT] Stopping Firestore listener for: videoGenerations/${generationId}`);
-      unsubscribe();
-    };
-  }, [generationId]);
-
-  // Effect 2: React to changes in `videoDoc` state and update UI effects (progress bar, video player)
-  useEffect(() => {
-    // If there is no document data, set initial progress based on whether we have an ID
-    if (!videoDoc) {
-      setProgress(generationId ? 10 : 0);
+      setVideoDoc(null);
+      setProgress(0);
       setError(null);
       return;
     }
 
-    // Update progress and error state based on the document status
+    const ref = doc(db, 'videoGenerations', generationId);
+    console.log(`[CLIENT] Listening: videoGenerations/${generationId}`);
+
+    const unsub = onSnapshot(
+      ref,
+      { includeMetadataChanges: true }, // <— Important to fight cache effects
+      snap => {
+        if (!snap.exists()) {
+          console.warn('[CLIENT] Doc not found (yet).');
+          return;
+        }
+        const data = snap.data() as VideoDoc;
+        console.log('[CLIENT] Snapshot data:', data);
+        setVideoDoc(data);
+      },
+      err => {
+        console.error('[CLIENT] onSnapshot error:', err);
+        setError('Realtime listener error.');
+      }
+    );
+
+    return () => {
+      console.log(`[CLIENT] Unsubscribe: videoGenerations/${generationId}`);
+      unsub();
+    };
+  }, [generationId]);
+
+  // -------- Helper: derive the reliable video URL (with fallback) ------------
+  const derivedVideoUrl = useMemo(() => {
+    if (!videoDoc) return undefined;
+    return (
+      videoDoc.videoUrl ||
+      videoDoc.webhookPayload?.generations?.[0]?.url ||
+      undefined
+    );
+  }, [videoDoc]);
+
+  // -------- 2) React to changes in `videoDoc` and drive the UI ----------- 
+  useEffect(() => {
+    if (!generationId) return;
+
+    if (!videoDoc) {
+      // Just launched
+      setProgress(10);
+      setError(null);
+      return;
+    }
+
     switch (videoDoc.status) {
       case 'pending':
         setProgress(25);
@@ -68,41 +94,71 @@ export default function KissGenerator({ generationId, sourceImageUri, onReset }:
       case 'processing':
         setProgress(75);
         break;
-      case 'succeed':
+      case 'succeed': {
         setProgress(100);
-        // By the time this effect runs, the component has re-rendered and the <video> element exists.
-        // It is now safe to access videoRef.current.
-        if (videoRef.current && videoDoc.videoUrl) {
-          console.log('[CLIENT] Status is SUCCEED. videoRef is available. Setting video src.', videoDoc.videoUrl);
-          if (videoRef.current.src !== videoDoc.videoUrl) {
-            videoRef.current.src = videoDoc.videoUrl;
+        // At this point, the render has occurred -> the <video> element exists
+        const url = derivedVideoUrl;
+        if (videoRef.current && url) {
+          if (videoRef.current.src !== url) {
+            console.log('[CLIENT] Setting video src:', url);
+            videoRef.current.src = url;
           }
-          // Attempt to play, but catch errors as autoplay can be blocked by browsers
-          videoRef.current.play().catch(e => console.warn('[CLIENT] Autoplay was prevented by the browser.', e));
-        } else if (!videoDoc.videoUrl) {
-          console.error('[CLIENT] Status is SUCCEED but videoUrl field is missing in the document.');
-          setError('Video has been generated, but its URL is missing.');
+          videoRef.current
+            .play()
+            .catch(e => console.warn('[CLIENT] Autoplay prevented:', e));
+        } else if (!url) {
+          console.error('[CLIENT] SUCCEED without videoUrl.');
+          setError('Video generated but URL is missing.');
         }
         break;
+      }
       case 'failed':
         setProgress(100);
-        setError(videoDoc.error || 'An unknown error occurred during video generation.');
+        setError(videoDoc.error || 'Video generation failed.');
         break;
       default:
-        console.log(`[CLIENT] Received unknown status: ${videoDoc.status}`);
+        console.log('[CLIENT] Unknown status:', videoDoc.status);
         break;
     }
-  }, [videoDoc, generationId]); // This effect runs whenever videoDoc changes
+  }, [videoDoc, generationId, derivedVideoUrl]);
 
+  // -------- 3) Watchdog: if stuck at 99% for > 10s, force a getDoc ------
+  useEffect(() => {
+    if (!generationId || progress < 75 || progress === 100) return;
+
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        console.log('[CLIENT] Watchdog: refetching doc from server...');
+        const ref = doc(db, 'videoGenerations', generationId);
+        const snap = await getDoc(ref); // Force a one-time read
+        if (snap.exists()) {
+          const data = snap.data() as VideoDoc;
+          console.log('[CLIENT] Watchdog fetched:', data);
+          setVideoDoc(data);
+        }
+      } catch (e) {
+        console.error('[CLIENT] Watchdog getDoc error:', e);
+      }
+    }, 10_000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [progress, generationId]);
+
+  // -------- 4) Download Handler ----------
   const handleDownload = () => {
-    if (videoDoc && videoDoc.videoUrl) {
-      const a = document.createElement('a');
-      a.href = videoDoc.videoUrl;
-      a.download = `kiss-video-${generationId}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
+    const url = derivedVideoUrl;
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kiss-video-${generationId}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const isLoading = progress > 0 && progress < 100;
@@ -111,38 +167,53 @@ export default function KissGenerator({ generationId, sourceImageUri, onReset }:
     <Card className="w-full max-w-md mx-auto">
       <CardContent className="p-6">
         <div className="aspect-square bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-          {videoDoc?.status === 'succeed' && videoDoc.videoUrl ? (
+          {videoDoc?.status === 'succeed' && derivedVideoUrl ? (
             <video
               ref={videoRef}
               controls
               playsInline
-              autoPlay // It's better to use the autoPlay attribute
+              autoPlay
               className="w-full h-full object-contain"
-              onLoadedData={() => console.log('[CLIENT] Video data has been loaded into the player.')}
+              onLoadedData={() => console.log('[CLIENT] Video loaded.')}
+              onError={(e) => console.error('[CLIENT] <video> error', e)}
             />
           ) : (
-            <img src={sourceImageUri || ''} alt="Fused faces" className="w-full h-full object-contain" />
+            <img
+              src={sourceImageUri || ''}
+              alt="Fused"
+              className="w-full h-full object-contain"
+            />
           )}
         </div>
-        
+
         {isLoading && (
           <div className="mt-4 text-center">
-            <p className="text-sm text-muted-foreground mb-2">Generating your kiss... {progress}%</p>
+            <p className="text-sm text-muted-foreground mb-2">
+              Generating your video… {progress}%
+            </p>
             <Progress value={progress} className="w-full" />
           </div>
         )}
 
         {error && (
           <div className="mt-4 text-center p-3 bg-destructive/10 rounded-md">
-            <p className="text-sm font-medium text-destructive">Video Generation Failed</p>
+            <p className="text-sm font-medium text-destructive">
+              Video Generation Failed
+            </p>
             <p className="text-xs text-destructive/80 mt-1">{error}</p>
           </div>
         )}
 
-        {videoDoc?.status === 'succeed' && (
+        {videoDoc?.status === 'succeed' && derivedVideoUrl && (
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button onClick={handleDownload}><Download className="mr-2 h-4 w-4"/>Download</Button>
-            <Button onClick={onReset} variant="outline"><Repeat className="mr-2 h-4 w-4"/>Create New</Button>
+            <Button onClick={handleDownload}>
+              <Download className="mr-2 h-4 w-4" />
+              Download
+            </Button>
+            <Button onClick={onReset} variant="outline">
+              <Repeat className="mr-2 h-4 w-4" />
+              Create New
+            </Button>
           </div>
         )}
       </CardContent>
