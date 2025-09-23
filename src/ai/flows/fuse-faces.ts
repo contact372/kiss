@@ -2,7 +2,8 @@
 /**
  * @fileOverview A flow for fusing two faces into a single scene using an image generation model.
  */
-import { ai } from '@/ai/genkit';
+// Corrected import: We now import 'generate' directly from the core library.
+import { generate } from '@genkit-ai/core';
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
 /**
@@ -10,7 +11,7 @@ import { FuseFacesInput, FuseFacesOutput } from './types';
  * that combines both people side-by-side in a new scene.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion with Vertex AI...');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion with CORRECTED Genkit call...');
 
   try {
     if (!input.image1Uri || !input.image2Uri) {
@@ -18,11 +19,10 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
       return { error: 'Image fusion failed: One or more images were missing or invalid.' };
     }
 
-    const { candidates } = await ai.generate({
-      // 1. Use the Vertex AI compatible model name.
+    // Corrected call: We now use the imported 'generate' function directly.
+    const { candidates } = await generate({
       model: 'gemini-2.5-flash-image-preview',
       
-      // 2. The structure remains correct for Gemini models.
       prompt: [
         { 
           text: "From these two face images, create a picture where the two people are placed side by side, facing forward, in a horizontal 9:16 image, captured in a close-up/chest-up shot, with a simple background — while preserving the fidelity of their faces." 
@@ -49,7 +49,6 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     };
     
   } catch (err) {
-    // Updated error logging for better debugging
     console.error('[FUSE_FACES_FLOW_ERROR] Detailed error object:', JSON.stringify(err, null, 2));
     
     const message = err instanceof Error ? err.message : 'An unknown error occurred';
