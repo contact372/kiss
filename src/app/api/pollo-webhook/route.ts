@@ -1,13 +1,12 @@
-'use server';
 import { admin } from '@/lib/firebase/firebase-admin';
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
+import { FieldValue } from 'firebase-admin/firestore'; // <<< THE FIX: Import FieldValue
 
 export async function POST(req: Request) {
   const headersList = headers();
 
-  // ... (Signature verification code is unchanged)
   const webhookId = headersList.get('x-webhook-id');
   const webhookTimestamp = headersList.get('x-webhook-timestamp');
   const signatureFromHeader = headersList.get('x-webhook-signature');
@@ -48,18 +47,16 @@ export async function POST(req: Request) {
     const doc = querySnapshot.docs[0];
     const videoUrl = event.generations?.[0]?.url;
 
-    // *** NEW DETAILED LOGGING ***
     console.log(`[WEBHOOK_DEBUG] Extracted videoUrl: ${videoUrl}`);
 
     const updatePayload = {
       status: status, 
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(), // <<< THE FIX: Use FieldValue directly
       webhookPayload: event,
       ...(videoUrl && { videoUrl: videoUrl }),
     };
 
     console.log('[WEBHOOK_DEBUG] Preparing to write payload to Firestore:', JSON.stringify(updatePayload));
-    // ****************************
 
     await doc.ref.update(updatePayload);
 
