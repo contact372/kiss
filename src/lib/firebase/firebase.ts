@@ -21,17 +21,19 @@ if (typeof window !== 'undefined') {
     }
     auth = getAuth(app);
 
-    // HERE IS THE FIX:
+    // HERE IS THE CORRECTED FIX:
     // We force the Firestore client to use long-polling. This is a workaround
     // for a known issue with some development environments (like local emulators
     // behind certain proxies or Docker configurations) where modern real-time
     // connections (WebSockets/HTTP2) fail. Long-polling is a more robust, albeit
     // slightly less efficient, alternative that solves the "Transport failed" error.
     db = initializeFirestore(app, {
-      experimentalForceLongPolling: true,
-      merge: true, // This is not a standard option, so I'm removing it.
+      experimentalForceLongPolling: true
     });
 }
+
+// We also export the initialized db instance directly for convenience
+export { db };
 
 // These functions are intended for client-side use only.
 export function getFirebaseApp(): FirebaseApp {
