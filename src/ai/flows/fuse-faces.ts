@@ -17,22 +17,26 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const base64Image1 = input.image1Uri.split(',')[1];
     const base64Image2 = input.image2Uri.split(',')[1];
 
+    if (!base64Image1 || !base64Image2) {
+      console.error('[FUSE_FACES_FLOW_ERROR] Invalid image format. Expected two data URIs.');
+      return { error: 'Image fusion failed: One or more images were missing or invalid.' };
+    }
+
     const { candidates } = await ai.generate({
-      // 1. Use the new model specified in the documentation.
       model: 'googleai/gemini-2.5-flash-image-preview',
       
-      // 2. Use the new prompt structure [image, image, text] and the new text.
+      // FIX: Use the exact prompt structure from the documentation.
       prompt: [
         {
-          media: {
-            contentType: 'image/png',
-            content: Buffer.from(base64Image1, 'base64'),
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64Image1, // Pass the base64 string directly
           },
         },
         {
-          media: {
-            contentType: 'image/png',
-            content: Buffer.from(base64Image2, 'base64'),
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64Image2, // Pass the base64 string directly
           },
         },
         {
