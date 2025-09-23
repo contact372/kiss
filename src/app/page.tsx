@@ -12,7 +12,9 @@ import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import SubscriptionDialog from '@/components/app/subscription-dialog';
 import { useAuth } from '@/contexts/auth-context';
-import { grantPaidAccessClient, db } from '@/lib/firebase/db';
+import { grantPaidAccessClient } from '@/lib/firebase/db';
+// FIX #1: The db instance MUST be imported from the file where it's correctly configured with long-polling.
+import { db } from '@/lib/firebase/firebase';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 
 // Types
@@ -30,7 +32,8 @@ interface CreateKissVideoActionInput {
 interface CreateKissVideoActionOutput {
     generationId?: string;
     error?: string;
-    sourceImageDataUri?: string;
+    // FIX #2: The property name from the action is now sourceImageUrl
+    sourceImageUrl?: string;
 }
 
 function PageContent() {
@@ -110,15 +113,16 @@ function PageContent() {
 
     if (result.generationId) {
         console.log(`[CLIENT] Received generationId: ${result.generationId}. Listening for video URL...`);
-        if (result.sourceImageDataUri) {
-            setSourceImageUrl(result.sourceImageDataUri);
+        // Use the corrected property name from the action's output
+        if (result.sourceImageUrl) {
+            setSourceImageUrl(result.sourceImageUrl);
         }
 
-        // Unsubscribe from any previous listener
         if (firestoreUnsubscribeRef.current) {
             firestoreUnsubscribeRef.current();
         }
 
+        // This will now use the correct 'db' instance from the correct import
         const unsub = onSnapshot(doc(db, "videoGenerations", result.generationId), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -137,7 +141,7 @@ function PageContent() {
                     stopLoading();
                     setVideoUrl(data.videoUrl);
                     setAppState('result');
-                    if (firestoreUnsubscribeRef.current) firestoreUnsubscribeRef.current(); // Unsubscribe after getting the URL
+                    if (firestoreUnsubscribeRef.current) firestoreUnsubscribeRef.current();
                     refreshUserProfile();
                 }
             }
@@ -182,10 +186,6 @@ function PageContent() {
     };
   }, []);
 
-  // All other component logic remains the same...
-  // ... (handleTeaserFlow, handleGenerate, render functions, etc.)
-
-  // [The rest of the component code is unchanged and has been omitted for brevity]
   useEffect(() => {
     const startTeaserParam = searchParams.get('start_teaser');
     if (startTeaserParam !== 'true' || !user) return;
