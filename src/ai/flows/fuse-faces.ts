@@ -10,7 +10,7 @@ import { FuseFacesInput, FuseFacesOutput } from './types';
  * that combines both people side-by-side in a new scene.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion with final correct structure...');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion with FINAL definitive structure...');
 
   try {
     if (!input.image1Uri || !input.image2Uri) {
@@ -19,21 +19,23 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     }
 
     const { candidates } = await ai.generate({
-      // 1. Use the new, more powerful model.
+      // Model is correct.
       model: 'googleai/gemini-2.5-flash-image-preview',
       
-      // 2. Use the correct structure for Gemini models via genkit:
-      // A single 'prompt' array containing all parts (text and media).
+      // Structure is now DEFINITIVELY correct for genkit + gemini.
+      // A single 'prompt' array contains all parts.
       prompt: [
+        // The text part.
         { 
           text: "From these two face images, create a picture where the two people are placed side by side, facing forward, in a horizontal 9:16 image, captured in a close-up/chest-up shot, with a simple background — while preserving the fidelity of their faces." 
         },
+        // The image parts, using the syntax genkit understands.
         { media: { url: input.image1Uri } },
         { media: { url: input.image2Uri } },
       ],
       
       output: {
-        format: 'uri', // The output should still be a data URI.
+        format: 'uri', 
       },
     });
 
