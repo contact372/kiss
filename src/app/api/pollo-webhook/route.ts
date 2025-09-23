@@ -2,7 +2,7 @@ import { admin } from '@/lib/firebase/firebase-admin';
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
-import { FieldValue } from 'firebase-admin/firestore'; // <<< THE FIX: Import FieldValue
+import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(req: Request) {
   const headersList = headers();
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
     const updatePayload = {
       status: status, 
-      updatedAt: FieldValue.serverTimestamp(), // <<< THE FIX: Use FieldValue directly
+      updatedAt: FieldValue.serverTimestamp(),
       webhookPayload: event,
       ...(videoUrl && { videoUrl: videoUrl }),
     };
