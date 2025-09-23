@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -21,55 +20,19 @@ export default function KissGenerator({ generationId, sourceImageUri, onReset }:
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // Effect 1: Listen to Firestore and update the local state `videoDoc`
   useEffect(() => {
     if (!generationId) {
-      setProgress(0);
-      setVideoDoc(null);
-      setError(null);
-      return;
+      return; // Do nothing if there's no ID
     }
 
-    setProgress(10); // Initial progress when generation starts
-    setError(null);
-
-    console.log(`[CLIENT] Starting to listen to document: videoGenerations/${generationId}`);
-
+    console.log(`[CLIENT] Starting Firestore listener for: videoGenerations/${generationId}`);
     const unsubscribe = onSnapshot(
       doc(db, 'videoGenerations', generationId),
       (docSnap) => {
         if (docSnap.exists()) {
-          const data = docSnap.data();
-          console.log('[CLIENT] Received Firestore update:', data);
-          setVideoDoc(data); // This is crucial for React to re-render with new data
-
-          switch (data.status) {
-            case 'pending':
-              setProgress(25);
-              break;
-            case 'processing':
-              setProgress(75);
-              break;
-            case 'succeed':
-              console.log('[CLIENT] Status is \'succeed\'. Attempting to play video.');
-              setProgress(100);
-              if (videoRef.current && data.videoUrl) {
-                console.log('[CLIENT] Video URL found. Setting src and playing.', data.videoUrl);
-                videoRef.current.src = data.videoUrl;
-                videoRef.current.play().catch(e => console.error("Autoplay failed:", e));
-              } else {
-                console.error('[CLIENT] Status is \'succeed\' but videoRef or videoUrl is missing.');
-                setError('Video generated, but URL is missing.');
-              }
-              break;
-            case 'failed':
-              console.error('[CLIENT] Status is \'failed\'.', data.error);
-              setProgress(100);
-              setError(data.error || 'An unknown error occurred during video generation.');
-              break;
-            default:
-              console.log(`[CLIENT] Received unknown status: ${data.status}`);
-              break;
-          }
+          console.log('[CLIENT] Received Firestore update:', docSnap.data());
+          setVideoDoc(docSnap.data()); // The ONLY job of this listener is to update the state
         } else {
           console.error('[CLIENT] Document does not exist.');
           setError('The generation task could not be found.');
@@ -81,12 +44,55 @@ export default function KissGenerator({ generationId, sourceImageUri, onReset }:
       }
     );
 
-    // This is the cleanup function that runs when the component unmounts or generationId changes
+    // Cleanup function to stop listening when the component unmounts
     return () => {
-      console.log(`[CLIENT] Stopping listener for document: videoGenerations/${generationId}`);
+      console.log(`[CLIENT] Stopping Firestore listener for: videoGenerations/${generationId}`);
       unsubscribe();
     };
-  }, [generationId]); // The effect re-runs ONLY when generationId changes
+  }, [generationId]);
+
+  // Effect 2: React to changes in `videoDoc` state and update UI effects (progress bar, video player)
+  useEffect(() => {
+    // If there is no document data, set initial progress based on whether we have an ID
+    if (!videoDoc) {
+      setProgress(generationId ? 10 : 0);
+      setError(null);
+      return;
+    }
+
+    // Update progress and error state based on the document status
+    switch (videoDoc.status) {
+      case 'pending':
+        setProgress(25);
+        break;
+      case 'processing':
+        setProgress(75);
+        break;
+      case 'succeed':
+        setProgress(100);
+        // By the time this effect runs, the component has re-rendered and the <video> element exists.
+        // It is now safe to access videoRef.current.
+        if (videoRef.current && videoDoc.videoUrl) {
+          console.log('[CLIENT] Status is SUCCEED. videoRef is available. Setting video src.', videoDoc.videoUrl);
+          if (videoRef.current.src !== videoDoc.videoUrl) {
+            videoRef.current.src = videoDoc.videoUrl;
+          }
+          // Attempt to play, but catch errors as autoplay can be blocked by browsers
+          videoRef.current.play().catch(e => console.warn('[CLIENT] Autoplay was prevented by the browser.', e));
+        } else if (!videoDoc.videoUrl) {
+          console.error('[CLIENT] Status is SUCCEED but videoUrl field is missing in the document.');
+          setError('Video has been generated, but its URL is missing.');
+        }
+        break;
+      case 'failed':
+        setProgress(100);
+        setError(videoDoc.error || 'An unknown error occurred during video generation.');
+        break;
+      default:
+        console.log(`[CLIENT] Received unknown status: ${videoDoc.status}`);
+        break;
+    }
+  }, [videoDoc, generationId]); // This effect runs whenever videoDoc changes
 
   const handleDownload = () => {
     if (videoDoc && videoDoc.videoUrl) {
@@ -108,11 +114,11 @@ export default function KissGenerator({ generationId, sourceImageUri, onReset }:
           {videoDoc?.status === 'succeed' && videoDoc.videoUrl ? (
             <video
               ref={videoRef}
-              src={videoDoc.videoUrl}
               controls
               playsInline
+              autoPlay // It's better to use the autoPlay attribute
               className="w-full h-full object-contain"
-              onLoadedData={() => console.log('[CLIENT] Video data loaded.')}
+              onLoadedData={() => console.log('[CLIENT] Video data has been loaded into the player.')}
             />
           ) : (
             <img src={sourceImageUri || ''} alt="Fused faces" className="w-full h-full object-contain" />
