@@ -10,7 +10,7 @@ import { FuseFacesInput, FuseFacesOutput } from './types';
  * that combines both people side-by-side in a new scene.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion process with final correct structure...');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion with final correct structure...');
 
   try {
     if (!input.image1Uri || !input.image2Uri) {
