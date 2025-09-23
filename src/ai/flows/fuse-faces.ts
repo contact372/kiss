@@ -2,7 +2,10 @@
 /**
  * @fileOverview A flow for fusing two faces into a single scene using an image generation model.
  */
-// Corrected import: We now import 'generate' directly from the core library.
+
+// CRITICAL FIX: Ensure the Genkit configuration is loaded before any other code.
+import '@/ai/genkit';
+
 import { generate } from '@genkit-ai/core';
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
@@ -11,7 +14,7 @@ import { FuseFacesInput, FuseFacesOutput } from './types';
  * that combines both people side-by-side in a new scene.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion with CORRECTED Genkit call...');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion. Configuration should now be loaded.');
 
   try {
     if (!input.image1Uri || !input.image2Uri) {
@@ -19,7 +22,6 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
       return { error: 'Image fusion failed: One or more images were missing or invalid.' };
     }
 
-    // Corrected call: We now use the imported 'generate' function directly.
     const { candidates } = await generate({
       model: 'gemini-2.5-flash-image-preview',
       
