@@ -3,18 +3,28 @@
  * @fileOverview A flow for fusing two faces into a single scene using an image generation model.
  */
 
-// CRITICAL FIX: Ensure the Genkit configuration is loaded before any other code.
-import '@/ai/genkit';
-
-import { generate } from '@genkit-ai/core';
+// FINAL ATTEMPT: Configure Genkit directly in this file to guarantee execution.
+import { configure, generate } from '@genkit-ai/core';
+import { vertexAI } from '@genkit-ai/vertexai';
 import { FuseFacesInput, FuseFacesOutput } from './types';
+
+// This ensures that the configuration is loaded and applied before any other code in this file.
+configure({
+  plugins: [
+    vertexAI({
+      location: 'europe-west1', // Your specified location
+    }),
+  ],
+  logLevel: 'debug',
+  enableTracingAndMetrics: true,
+});
 
 /**
  * Takes two images, each with a face, and generates a new image
  * that combines both people side-by-side in a new scene.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion. Configuration should now be loaded.');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion with in-file configuration.');
 
   try {
     if (!input.image1Uri || !input.image2Uri) {
