@@ -2,7 +2,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase/db';
+// THIS IS THE FIX: The db instance must be imported from the firebase.ts file where it is configured,
+// NOT from db.ts which contains business logic.
+import { db } from '@/lib/firebase/firebase';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
