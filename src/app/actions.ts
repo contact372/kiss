@@ -1,6 +1,6 @@
 'use server';
 
-import { getFirebaseAdmin, decrementUserCreditsAdmin } from '@/lib/firebase/firebase-admin';
+import { admin, decrementUserCreditsAdmin } from '@/lib/firebase/firebase-admin';
 import type { UserProfile } from '@/lib/firebase/types';
 import { generateKissVideo } from '@/ai/flows/generate-kiss-video'; 
 
@@ -19,7 +19,6 @@ interface CreateKissVideoActionOutput {
 
 export async function createKissVideoAction(input: CreateKissVideoActionInput): Promise<CreateKissVideoActionOutput> {
     console.log('[ACTION_START] createKissVideoAction invoked.');
-    const admin = getFirebaseAdmin();
     const { userId, image1DataUri, image2_data_uri } = input;
 
     if (!userId || !image1DataUri || !image2_data_uri) {
