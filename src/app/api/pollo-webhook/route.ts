@@ -1,4 +1,4 @@
-import { getFirebaseAdmin } from '@/lib/firebase/firebase-admin';
+import { admin } from '@/lib/firebase/firebase-admin';
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
@@ -6,7 +6,6 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(req: Request) {
   const headersList = headers();
-  const admin = getFirebaseAdmin();
 
   const webhookId = headersList.get('x-webhook-id');
   const webhookTimestamp = headersList.get('x-webhook-timestamp');
