@@ -31,7 +31,6 @@ async function makeSideBySideCollage(leftBuf: Buffer, rightBuf: Buffer): Promise
   const H = 1080; // 16:9 aspect ratio height
   const panelW = Math.floor(W / 2);
 
-  // Resize each image to fit one half of the canvas
   const leftPanel = await sharp(leftBuf)
     .resize(panelW, H, { fit: 'cover', position: 'center' })
     .toBuffer();
@@ -40,13 +39,12 @@ async function makeSideBySideCollage(leftBuf: Buffer, rightBuf: Buffer): Promise
     .resize(panelW, H, { fit: 'cover', position: 'center' })
     .toBuffer();
 
-  // Create a blank canvas and composite the two panels
   return sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
     .composite([
       { input: leftPanel, left: 0, top: 0 },
       { input: rightPanel, left: panelW, top: 0 },
     ])
-    .png() // Output as PNG to preserve transparency and quality
+    .png()
     .toBuffer();
 }
 
@@ -66,36 +64,33 @@ function extractGoogleImage(data: any): { b64?: string; mime?: string } {
 }
 
 /**
- * Main flow function: takes two images, creates a collage, and sends it to Google Gemini.
+ * Main flow function: takes two images, creates a collage, and sends it to Google Vertex AI.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion using direct API call.');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion using Vertex AI API call.');
   
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    console.error('[FUSE_FACES_ERROR] GOOGLE_API_KEY is not set.');
-    return { error: 'Server configuration error: Missing API Key.' };
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT;
+  if (!projectId) {
+    console.error('[FUSE_FACES_ERROR] GOOGLE_CLOUD_PROJECT env variable is not set.');
+    return { error: 'Server configuration error: Missing Project ID.' };
   }
 
   try {
-    // 1. Convert data URIs to buffers
     const { buf: buf1 } = dataUriToBuffer(input.image1Uri);
     const { buf: buf2 } = dataUriToBuffer(input.image2Uri);
 
-    // 2. Create a side-by-side collage
     console.log('[FUSE_FACES_FLOW] Creating side-by-side collage.');
     const collage = await makeSideBySideCollage(buf1, buf2);
     const collageB64 = collage.toString('base64');
 
-    // 3. Call Google Gemini API with the correct regional endpoint
-    console.log('[FUSE_FACES_FLOW] Calling Google Gemini API in europe-west1.');
+    console.log('[FUSE_FACES_FLOW] Calling Google Vertex AI API in europe-west1.');
     const model = 'gemini-1.5-flash-latest';
     const region = 'europe-west1';
-    const url = `https://${region}-generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
 
     const prompt =
       'From this collage, create a single, photorealistic 16:9 image. \n' +
-      'The final image should feature two people inspired by the collage: the person on the left inspired by the left side of the collage, and the person on the right by the right side. \n' +
+      'The final image should feature two people inspired by the collage. \n' +
       'Place them side-by-side in a chest-up shot. Do not reproduce the collage itself. \n' +
       'Aim for a neutral, clean studio background with soft, consistent lighting. Preserve the general likeness of the faces but create new, unique individuals.';
 
@@ -110,15 +105,26 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
       ],
     };
 
-    const res = await fetch(url, { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload) 
+    // Authenticate by passing the access token from the service account
+    // This is a common pattern for server-to-server calls on GCP
+    const authRes = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
+      headers: { 'Metadata-Flavor': 'Google' },
+    });
+    const authJson = await authRes.json();
+    const accessToken = authJson.access_token;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
       const errorBody = await res.text();
-      console.error(`[FUSE_FACES_ERROR] Google API error (${res.status}):`, errorBody);
+      console.error(`[FUSE_FACES_ERROR] Google Vertex AI API error (${res.status}):`, errorBody);
       return { error: `Image generation failed with status: ${res.status}` };
     }
 
@@ -126,7 +132,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const { b64, mime } = extractGoogleImage(json);
 
     if (!b64) {
-      console.error('[FUSE_FACES_ERROR] No image data found in Google API response:', JSON.stringify(json));
+      console.error('[FUSE_FACES_ERROR] No image data found in Vertex AI API response:', JSON.stringify(json));
       return { error: 'Image generation failed: No image was returned.' };
     }
 
