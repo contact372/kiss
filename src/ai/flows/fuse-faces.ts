@@ -73,7 +73,6 @@ function extractGoogleImage(data: any): { b64?: string; mime?: string } {
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
   console.log('[FUSE_FACES_FLOW] Starting image fusion using Vertex AI API call.');
   
-  // *** THE FIX: Call the getter to ensure the admin SDK is initialized ***
   const admin = getFirebaseAdmin();
   const projectId = admin.app.options.projectId;
 
@@ -90,9 +89,10 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const collage = await makeSideBySideCollage(buf1, buf2);
     const collageB64 = collage.toString('base64');
 
-    console.log('[FUSE_FACES_FLOW] Calling Google Vertex AI API in europe-west1.');
     const model = 'gemini-1.5-flash-latest';
-    const region = 'europe-west1';
+    // FIX: Changed region from europe-west1 to a more common one for this model.
+    const region = 'us-central1';
+    console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region}.`);
     const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
 
     const prompt =
