@@ -5,7 +5,7 @@
  */
 import { fuseFaces } from './fuse-faces'; 
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
-import { getFirebaseAdmin } from '@/lib/firebase/firebase-admin';
+import { admin } from '@/lib/firebase/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 /**
@@ -15,7 +15,6 @@ import { FieldValue } from 'firebase-admin/firestore';
  */
 export async function generateKissVideo(input: GenerateKissVideoInput): Promise<GenerateKissVideoOutput> {
   console.log('[MAIN_FLOW] Starting two-step video generation process...');
-  const admin = getFirebaseAdmin();
 
   // STEP 1: Fuse the two images
   console.log('[MAIN_FLOW] Step 1: Fusing faces...');
