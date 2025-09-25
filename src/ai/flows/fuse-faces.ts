@@ -1,6 +1,7 @@
 'use server';
 
 import sharp from 'sharp';
+import { admin } from '../../lib/firebase/admin';
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
 /**
@@ -69,9 +70,9 @@ function extractGoogleImage(data: any): { b64?: string; mime?: string } {
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
   console.log('[FUSE_FACES_FLOW] Starting image fusion using Vertex AI API call.');
   
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT;
+  const projectId = admin.app().options.projectId;
   if (!projectId) {
-    console.error('[FUSE_FACES_ERROR] GOOGLE_CLOUD_PROJECT env variable is not set.');
+    console.error('[FUSE_FACES_ERROR] Could not determine Project ID from Firebase Admin SDK.');
     return { error: 'Server configuration error: Missing Project ID.' };
   }
 
@@ -140,7 +141,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     return { fusedImageUri: `data:${mime || 'image/png'};base64,${b64}` };
 
   } catch (err: any) {
-    console.error('[FUSE_FACES_ERROR] An unexpected error occurred:', err);
+    console.error('[FUSE_FACES_ERROR] An unexpected error occurred:', err); 
     return { error: err.message || 'An unknown error occurred during image fusion.' };
   }
 }
