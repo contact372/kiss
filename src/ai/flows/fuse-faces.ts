@@ -3,37 +3,23 @@
  * @fileOverview A flow for fusing two faces into a single scene using an image generation model.
  */
 
-// BUNDLER-FIX ATTEMPT: Use namespace imports to avoid bundling issues.
-import * as core from '@genkit-ai/core';
-import { vertexAI } from '@genkit-ai/vertexai';
+import { generate } from '@genkit-ai/core';
 import { FuseFacesInput, FuseFacesOutput } from './types';
-
-// Configure using the namespace.
-core.configure({
-  plugins: [
-    vertexAI({
-      location: 'europe-west1',
-    }),
-  ],
-  logLevel: 'debug',
-  enableTracingAndMetrics: true,
-});
 
 /**
  * Takes two images, each with a face, and generates a new image
  * that combines both people side-by-side in a new scene.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion with namespace imports.');
+  console.log('[FUSE_FACES_FLOW] Starting image fusion.');
 
   try {
     if (!input.image1Uri || !input.image2Uri) {
-      console.error('[FUSE_FACES_FLOW_ERROR] Invalid image format.');
+      console.error('[FUSE_FACES_FLOW_ERROR] Invalid image format. Expected two data URIs.');
       return { error: 'Image fusion failed: One or more images were missing or invalid.' };
     }
 
-    // Generate using the namespace.
-    const { candidates } = await core.generate({
+    const { candidates } = await generate({
       model: 'gemini-2.5-flash-image-preview',
       
       prompt: [
@@ -45,7 +31,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
       ],
       
       output: {
-        format: 'uri',
+        format: 'uri', 
       },
     });
 
