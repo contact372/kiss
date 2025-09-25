@@ -1,7 +1,7 @@
 'use server';
 
 import sharp from 'sharp';
-import { admin } from '../../lib/firebase/admin';
+import { admin } from '../../lib/firebase/firebase-admin';
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
 /**
@@ -141,7 +141,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     return { fusedImageUri: `data:${mime || 'image/png'};base64,${b64}` };
 
   } catch (err: any) {
-    console.error('[FUSE_FACES_ERROR] An unexpected error occurred:', err); 
+    console.error('[FUSE_FACES_ERROR] An unexpected error occurred:', err);
     return { error: err.message || 'An unknown error occurred during image fusion.' };
   }
 }
