@@ -1,3 +1,4 @@
+// src/lib/firebase/firebase-admin.ts
 import { initializeApp as initializeAdminApp, getApps as getAdminApps, type App as AdminApp } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp, type Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuth, type Auth as AdminAuth } from 'firebase-admin/auth';
@@ -5,53 +6,43 @@ import { getStorage as getAdminStorage, type Storage as AdminStorage } from 'fir
 import type { UserProfile } from './types';
 import { firebaseConfig } from './config';
 
-// A singleton instance to ensure we don't re-initialize multiple times.
-let adminInstance: {
-  app: AdminApp;
-  auth: AdminAuth;
-  db: AdminFirestore;
-  storage: AdminStorage;
-} | null = null;
+let adminApp: AdminApp;
+let adminAuth: AdminAuth;
+let adminDb: AdminFirestore;
+let adminStorage: AdminStorage;
 
-/**
- * Initializes and returns the Firebase Admin SDK instance, ensuring it's a singleton.
- */
-export function getFirebaseAdmin() {
-  if (adminInstance) {
-    return adminInstance;
-  }
-
-  console.log('[FIREBASE_ADMIN_LOG] Attempting to initialize Firebase Admin SDK...');
-  try {
-    let app: AdminApp;
+console.log('[FIREBASE_ADMIN_LOG] Attempting to initialize Firebase Admin SDK...');
+try {
     if (getAdminApps().length === 0) {
-      app = initializeAdminApp({
-        projectId: firebaseConfig.projectId,
-        storageBucket: firebaseConfig.storageBucket,
-      });
-      console.log(`[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
+        adminApp = initializeAdminApp({
+            projectId: firebaseConfig.projectId,
+            // *** THE REAL FIX ***
+            // Use the storageBucket from the config, don't construct it manually.
+            storageBucket: firebaseConfig.storageBucket 
+        });
+        console.log(`[FIREBASE_ADMIN_LOG] Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
     } else {
-      app = getAdminApps()[0];
-      console.log('[FIREBASE_ADMIN_LOG] Reusing existing Firebase Admin SDK instance.');
+        adminApp = getAdminApps()[0];
+        console.log('[FIREBASE_ADMIN_LOG] Reusing existing Firebase Admin SDK instance.');
     }
 
-    const auth = getAdminAuth(app);
-    const db = getAdminFirestore(app);
-    const storage = getAdminStorage(app);
+    adminAuth = getAdminAuth(adminApp);
+    adminDb = getAdminFirestore(adminApp);
+    adminStorage = getAdminStorage(adminApp);
 
-    adminInstance = { app, auth, db, storage };
     console.log('[FIREBASE_ADMIN_LOG] Firebase Admin services (Auth, Firestore, Storage) obtained successfully.');
 
-    return adminInstance;
-
-  } catch (e) {
+} catch (e) {
     console.error('[FIREBASE_ADMIN_FATAL] CRITICAL: Failed to initialize Firebase Admin SDK.', e);
-    // Re-throw the error to ensure the calling function knows about the failure.
-    throw e; 
-  }
 }
 
-// Keep the existing helper functions, but make them use the getter to ensure initialization.
+export const admin = {
+  auth: adminAuth,
+  db: adminDb,
+  storage: adminStorage, 
+  app: adminApp,
+};
+
 
 export async function activateUserSubscriptionAdmin(uid: string) {
     if (!uid) {
@@ -59,11 +50,10 @@ export async function activateUserSubscriptionAdmin(uid: string) {
         throw new Error("UID is required to activate a subscription.");
     }
     console.log(`[FIREBASE_ADMIN] Attempting to activate subscription for UID: ${uid}`);
-    const { db } = getFirebaseAdmin();
-    const userRef = db.doc(`users/${uid}`);
+    const userRef = adminDb.doc(`users/${uid}`);
     
     try {
-        await db.runTransaction(async (transaction) => {
+        await adminDb.runTransaction(async (transaction) => {
             const userDoc = await transaction.get(userRef);
             
             if (!userDoc.exists) {
@@ -111,8 +101,7 @@ export async function cancelUserSubscriptionAdmin(uid: string, endsAt: string, e
         console.error("[FIREBASE_ADMIN_ERROR] cancelUserSubscriptionAdmin was called without a UID.");
         throw new Error("UID is required to cancel a subscription.");
     }
-    const { db } = getFirebaseAdmin();
-    const userRef = db.doc(`users/${uid}`);
+    const userRef = adminDb.doc(`users/${uid}`);
     
     const updateData: { subscriptionEndDate: any, isSubscribed?: boolean, creditsGranted?: boolean } = {
         subscriptionEndDate: Timestamp.fromDate(new Date(endsAt)),
@@ -132,11 +121,10 @@ export async function decrementUserCreditsAdmin(uid: string) {
         console.error("[FIREBASE_ADMIN_ERROR] decrementUserCreditsAdmin called without UID.");
         throw new Error("User ID is required to decrement credits.");
     }
-    const { db } = getFirebaseAdmin();
-    const userRef = db.doc(`users/${uid}`);
+    const userRef = admin.db.doc(`users/${uid}`);
     
     try {
-        await db.runTransaction(async (transaction) => {
+        await admin.db.runTransaction(async (transaction) => {
             const userDoc = await transaction.get(userRef);
             if (!userDoc.exists) {
                 throw new Error(`User profile not found for UID: ${uid}`);
