@@ -1,8 +1,10 @@
 'use server';
 
 import sharp from 'sharp';
-import { admin } from '../../lib/firebase/firebase-admin';
+import { getFirebaseAdmin } from '../../lib/firebase/firebase-admin';
 import { FuseFacesInput, FuseFacesOutput } from './types';
+
+// ... (helper functions dataUriToBuffer, makeSideBySideCollage, extractGoogleImage remain the same) ...
 
 /**
  * Converts a data URI string into a Buffer.
@@ -64,13 +66,17 @@ function extractGoogleImage(data: any): { b64?: string; mime?: string } {
   return {};
 }
 
+
 /**
  * Main flow function: takes two images, creates a collage, and sends it to Google Vertex AI.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
   console.log('[FUSE_FACES_FLOW] Starting image fusion using Vertex AI API call.');
   
-  const projectId = admin.app().options.projectId;
+  // *** THE FIX: Call the getter to ensure the admin SDK is initialized ***
+  const admin = getFirebaseAdmin();
+  const projectId = admin.app.options.projectId;
+
   if (!projectId) {
     console.error('[FUSE_FACES_ERROR] Could not determine Project ID from Firebase Admin SDK.');
     return { error: 'Server configuration error: Missing Project ID.' };
@@ -106,8 +112,6 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
       ],
     };
 
-    // Authenticate by passing the access token from the service account
-    // This is a common pattern for server-to-server calls on GCP
     const authRes = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
       headers: { 'Metadata-Flavor': 'Google' },
     });
