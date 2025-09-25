@@ -5,7 +5,6 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '4.5mb', // Default is 1mb, combined images can exceed this.
     },
-    instrumentationHook: true,
   },
   typescript: {
     ignoreBuildErrors: true,
