@@ -3,8 +3,20 @@
  * @fileOverview A flow for fusing two faces into a single scene using an image generation model.
  */
 
-import { generate } from '@genkit-ai/core';
+import * as core from '@genkit-ai/core';
+import * as vertexAI from '@genkit-ai/vertexai';
 import { FuseFacesInput, FuseFacesOutput } from './types';
+
+core.configure({
+  plugins: [
+    vertexAI.vertexAI({
+      location: 'europe-west1',
+    }),
+  ],
+  logLevel: 'debug',
+  enableTracingAndMetrics: true,
+});
+
 
 /**
  * Takes two images, each with a face, and generates a new image
@@ -19,7 +31,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
       return { error: 'Image fusion failed: One or more images were missing or invalid.' };
     }
 
-    const { candidates } = await generate({
+    const { candidates } = await core.generate({
       model: 'gemini-2.5-flash-image-preview',
       
       prompt: [
