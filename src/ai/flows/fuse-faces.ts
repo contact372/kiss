@@ -55,6 +55,13 @@ async function makeSideBySideCollage(leftBuf: Buffer, rightBuf: Buffer): Promise
  * Extracts the base64 image data from the Google API response.
  */
 function extractGoogleImage(data: any): { b64?: string; mime?: string } {
+  // For the :predict endpoint, the output is different.
+  const prediction = data?.predictions?.[0];
+  if (prediction?.bytesBase64Encoded) {
+      return { b64: prediction.bytesBase64Encoded, mime: 'image/png' };
+  }
+
+  // Fallback for :generateContent format, just in case.
   const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
   const imgPart = parts.find((p) => p?.inlineData);
   if (imgPart) {
@@ -89,11 +96,11 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const collage = await makeSideBySideCollage(buf1, buf2);
     const collageB64 = collage.toString('base64');
 
-    // FIX: Changed model to a stable, well-known vision model.
-    const model = 'gemini-1.0-pro-vision';
+    // FIX: Using a different model and a simplified API endpoint structure.
+    const model = 'gemini-1.5-pro-preview-0514';
     const region = 'us-central1';
     console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region}.`);
-    const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
+    const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/models/${model}:predict`;
 
     const prompt =
       'From this collage, create a single, photorealistic 16:9 image. \n' +
@@ -101,13 +108,12 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
       'Place them side-by-side in a chest-up shot. Do not reproduce the collage itself. \n' +
       'Aim for a neutral, clean studio background with soft, consistent lighting. Preserve the general likeness of the faces but create new, unique individuals.';
 
+    // The payload for the :predict endpoint has a different structure.
     const payload = {
-      contents: [
+      instances: [
         {
-          parts: [
-            { inline_data: { mime_type: 'image/png', data: collageB64 } },
-            { text: prompt },
-          ],
+          prompt: prompt,
+          image: { bytesBase64Encoded: collageB64 },
         },
       ],
     };
