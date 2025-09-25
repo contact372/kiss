@@ -7,15 +7,30 @@ import * as core from '@genkit-ai/core';
 import * as vertexAI from '@genkit-ai/vertexai';
 import { FuseFacesInput, FuseFacesOutput } from './types';
 
-core.configure({
-  plugins: [
-    vertexAI.vertexAI({
-      location: 'europe-west1',
-    }),
-  ],
-  logLevel: 'debug',
-  enableTracingAndMetrics: true,
-});
+// Use a global variable to ensure configuration happens only once.
+let isGenkitConfigured = false;
+
+function configureGenkit() {
+  if (!isGenkitConfigured) {
+    console.log('[GENKIT_CONFIG] Attempting to configure Genkit...');
+    try {
+      core.configure({
+        plugins: [
+          vertexAI.vertexAI({
+            location: 'europe-west1',
+          }),
+        ],
+        logLevel: 'debug',
+        enableTracingAndMetrics: true,
+      });
+      isGenkitConfigured = true;
+      console.log('[GENKIT_CONFIG] Genkit configured successfully.');
+    } catch (e) {
+      console.error('[GENKIT_CONFIG_ERROR] Failed to configure Genkit:', e);
+      // We don't set isGenkitConfigured to true, so it might retry on the next call.
+    }
+  }
+}
 
 
 /**
@@ -23,6 +38,7 @@ core.configure({
  * that combines both people side-by-side in a new scene.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
+  configureGenkit(); // Ensure Genkit is configured before running the flow.
   console.log('[FUSE_FACES_FLOW] Starting image fusion.');
 
   try {
