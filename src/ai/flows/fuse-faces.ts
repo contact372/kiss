@@ -87,10 +87,11 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const collage = await makeSideBySideCollage(buf1, buf2);
     const collageB64 = collage.toString('base64');
 
-    // 3. Call Google Gemini API
-    console.log('[FUSE_FACES_FLOW] Calling Google Gemini API.');
+    // 3. Call Google Gemini API with the correct regional endpoint
+    console.log('[FUSE_FACES_FLOW] Calling Google Gemini API in europe-west1.');
     const model = 'gemini-1.5-flash-latest';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const region = 'europe-west1';
+    const url = `https://${region}-generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt =
       'From this collage, create a single, photorealistic 16:9 image. \n' +
