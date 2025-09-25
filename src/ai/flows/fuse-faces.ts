@@ -14,7 +14,7 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
 
   try {
     const { candidates } = await ai.generate({
-      model: 'googleai/imagen-2', // Correct, stable model identifier
+      model: 'googleai/gemini-1.5-flash', // Correct, stable model identifier
       prompt: [
         {
           text: `CThe image you will receive is split into two, with one person on each side. From these two people, you need to create a horizontal 9:16 image showing both of them side by side, facing forward, in a medium close-up (chest level). The background should be simple and minimal, and the faces must remain faithful to the originals you received`,
