@@ -89,8 +89,8 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const collage = await makeSideBySideCollage(buf1, buf2);
     const collageB64 = collage.toString('base64');
 
-    const model = 'gemini-1.5-flash-latest';
-    // FIX: Changed region from europe-west1 to a more common one for this model.
+    // FIX: Changed model to a stable, well-known vision model.
+    const model = 'gemini-1.0-pro-vision';
     const region = 'us-central1';
     console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region}.`);
     const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
