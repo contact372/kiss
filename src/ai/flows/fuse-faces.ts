@@ -1,10 +1,7 @@
 'use server';
 
 import sharp from 'sharp';
-import { getFirebaseAdmin } from '../../lib/firebase/firebase-admin';
 import { FuseFacesInput, FuseFacesOutput } from './types';
-
-// ... (helper functions dataUriToBuffer, makeSideBySideCollage, extractGoogleImage remain the same) ...
 
 /**
  * Converts a data URI string into a Buffer.
@@ -27,132 +24,64 @@ function dataUriToBuffer(uri: string): { buf: Buffer; mime: string } {
 }
 
 /**
- * Creates a side-by-side 16:9 collage from two image buffers.
+ * Creates a side-by-side 16:9 collage from two image buffers, with intelligent cropping and orientation correction.
  */
 async function makeSideBySideCollage(leftBuf: Buffer, rightBuf: Buffer): Promise<Buffer> {
-  const W = 1920; // 16:9 aspect ratio width
-  const H = 1080; // 16:9 aspect ratio height
-  const panelW = Math.floor(W / 2);
+  const TARGET_W = 1280; // Target 16:9 width
+  const TARGET_H = 720;  // Target 16:9 height
+  const PANEL_W = Math.floor(TARGET_W / 2);
 
+  // Process left image: auto-rotate and crop to the most interesting area (attention).
   const leftPanel = await sharp(leftBuf)
-    .resize(panelW, H, { fit: 'cover', position: 'center' })
+    .rotate() // Automatically corrects orientation based on EXIF data
+    .resize(PANEL_W, TARGET_H, {
+      fit: 'cover',
+      position: sharp.strategy.attention, // Focus on the most salient region
+    })
     .toBuffer();
 
+  // Process right image similarly.
   const rightPanel = await sharp(rightBuf)
-    .resize(panelW, H, { fit: 'cover', position: 'center' })
+    .rotate()
+    .resize(PANEL_W, TARGET_H, {
+      fit: 'cover',
+      position: sharp.strategy.attention,
+    })
     .toBuffer();
 
-  return sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+  // Composite the two processed panels into a single 16:9 image.
+  return sharp({
+    create: {
+      width: TARGET_W,
+      height: TARGET_H,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 1 },
+    },
+  })
     .composite([
       { input: leftPanel, left: 0, top: 0 },
-      { input: rightPanel, left: panelW, top: 0 },
+      { input: rightPanel, left: PANEL_W, top: 0 },
     ])
     .png()
     .toBuffer();
 }
 
 /**
- * Extracts the base64 image data from the Google API response.
- */
-function extractGoogleImage(data: any): { b64?: string; mime?: string } {
-  // For the :predict endpoint, the output is different.
-  const prediction = data?.predictions?.[0];
-  if (prediction?.bytesBase64Encoded) {
-      return { b64: prediction.bytesBase64Encoded, mime: 'image/png' };
-  }
-
-  // Fallback for :generateContent format, just in case.
-  const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
-  const imgPart = parts.find((p) => p?.inlineData);
-  if (imgPart) {
-    return {
-      b64: imgPart.inlineData.data,
-      mime: imgPart.inlineData.mimeType || 'image/png',
-    };
-  }
-  return {};
-}
-
-
-/**
- * Main flow function: takes two images, creates a collage, and sends it to Google Vertex AI.
+ * Main flow function: takes two images and creates a fused collage to be sent to the video generator.
  */
 export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion using Vertex AI API call.');
-  
-  const admin = getFirebaseAdmin();
-  const projectId = admin.app.options.projectId;
-
-  if (!projectId) {
-    console.error('[FUSE_FACES_ERROR] Could not determine Project ID from Firebase Admin SDK.');
-    return { error: 'Server configuration error: Missing Project ID.' };
-  }
+  console.log('[FUSE_FACES_FLOW] Starting image fusion.');
 
   try {
-    const { buf: buf1 } = dataUriToBuffer(input.image1Uri);
+    const { buf: buf1, mime } = dataUriToBuffer(input.image1Uri);
     const { buf: buf2 } = dataUriToBuffer(input.image2Uri);
 
-    console.log('[FUSE_FACES_FLOW] Creating side-by-side collage.');
-    const collage = await makeSideBySideCollage(buf1, buf2);
-    const collageB64 = collage.toString('base64');
-
-    // Use the newer, more stable Imagen 3 model.
-    const model = 'imagen-3.0-generate-001';
-    const region = 'us-central1';
-    console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region} with model ${model}.`);
-    const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:predict`;
-
-    const prompt = ` The image you will receive contains two people. you need to create a horizontal rectangle 9:16 image showing both of them side by side horizontaly  like a single professionnal picture, framed from the chest up, both facing the camera following the rule of third.
-    Preserve the facial features, proportions, and natural look of the two people,don't change their faces, you have to be the most faithful possible.
-    Use soft, natural lighting and a sharp, clean result.
-    Background should be neutral and slightly blurred (like a simple room or natural environment), so the focus stays on the faces.
-    Use realistic colors, natural skin tones, no distortion, no cartoon or artistic filters, this has to look like a true professional photo.
-    The two people should look like they posed side by side for a professional photo, with consistent lighting and style.`;
-
-    // The payload for image-to-image with newer models is simpler and doesn't require a mask.
-    const payload = {
-      instances: [
-        {
-          prompt: prompt,
-          image: { bytesBase64Encoded: collageB64 },
-        },
-      ],
-      parameters: {
-        sampleCount: 1,
-      },
-    };
-
-    const authRes = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
-      headers: { 'Metadata-Flavor': 'Google' },
-    });
-    const authJson = await authRes.json();
-    const accessToken = authJson.access_token;
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const errorBody = await res.text();
-      console.error(`[FUSE_FACES_ERROR] Google Vertex AI API error (${res.status}):`, errorBody);
-      return { error: `Image generation failed with status: ${res.status}` };
-    }
-
-    const json = await res.json();
-    const { b64, mime } = extractGoogleImage(json);
-
-    if (!b64) {
-      console.error('[FUSE_FACES_ERROR] No image data found in Vertex AI API response:', JSON.stringify(json));
-      return { error: 'Image generation failed: No image was returned.' };
-    }
+    console.log('[FUSE_FACES_FLOW] Creating side-by-side collage with intelligent cropping.');
+    const collageBuffer = await makeSideBySideCollage(buf1, buf2);
+    const collageB64 = collageBuffer.toString('base64');
 
     console.log('[FUSE_FACES_FLOW] Image fusion successful.');
-    return { fusedImageUri: `data:${mime || 'image/png'};base64,${b64}` };
+    return { fusedImageUri: `data:${mime || 'image/png'};base64,${collageB64}` };
 
   } catch (err: any) {
     console.error('[FUSE_FACES_ERROR] An unexpected error occurred:', err);
