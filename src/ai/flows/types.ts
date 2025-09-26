@@ -30,7 +30,5 @@ export const GenerateKissVideoOutputSchema = z.object({
   videoUri: z.string().optional().describe("The final generated video, as a data URI."),
   sourceImageUri: z.string().optional().describe("The intermediate fused image, for debugging or display."),
   error: z.string().optional(),
-  taskId: z.string().optional().describe("The task ID from Pollo AI for video generation."),
-  status: z.string().optional().describe("The status from Pollo AI for video generation."),
 });
 export type GenerateKissVideoOutput = z.infer<typeof GenerateKissVideoOutputSchema>;
