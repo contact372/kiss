@@ -7,7 +7,7 @@ import { generateKissVideo } from '@/ai/flows/generate-kiss-video';
 interface CreateKissVideoActionInput {
     userId: string;
     image1DataUri: string;
-    image2_data_uri: string;
+    image2DataUri: string;
 }
 
 // FIX: The output property name is changed to match what the client (page.tsx) expects.
@@ -19,9 +19,9 @@ interface CreateKissVideoActionOutput {
 
 export async function createKissVideoAction(input: CreateKissVideoActionInput): Promise<CreateKissVideoActionOutput> {
     console.log('[ACTION_START] createKissVideoAction invoked.');
-    const { userId, image1DataUri, image2_data_uri } = input;
+    const { userId, image1DataUri, image2DataUri } = input;
 
-    if (!userId || !image1DataUri || !image2_data_uri) {
+    if (!userId || !image1DataUri || !image2DataUri) {
         console.error('[ACTION_FATAL] Missing one or more required inputs.');
         return { error: "Internal server error: Missing required data." };
     }
@@ -47,11 +47,13 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
 
         // 2. Call the AI flow, passing the userId
         console.log('[ACTION_LOG] Starting main video generation flow...');
-        const result = await generateKissVideo({
-            userId: userId, 
-            image1Uri: image1DataUri,
-            image2Uri: image2_data_uri,
-        });
+        const result = await generateKissVideo(
+            {
+                image1Uri: image1DataUri,
+                image2Uri: image2DataUri,
+            },
+            userId
+        );
         
         if (result.error || !result.generationId) {
             console.error('[ACTION_ERROR] Main flow failed:', result.error);
