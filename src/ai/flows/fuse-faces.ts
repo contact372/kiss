@@ -1,104 +1,157 @@
 'use server';
-/**
- * @fileOverview A multi-step flow that first fuses two images into one, 
- * then generates a video from that fused image, managing state via Firestore.
- */
-import { fuseFaces } from './fuse-faces'; 
-import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
-import { admin } from '@/lib/firebase/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+
+import sharp from 'sharp';
+import { getFirebaseAdmin } from '../../lib/firebase/firebase-admin';
+import { FuseFacesInput, FuseFacesOutput } from './types';
+
+// ... (helper functions dataUriToBuffer, makeSideBySideCollage, extractGoogleImage remain the same) ...
 
 /**
- * A two-step flow to generate a video:
- * 1. Fuse two separate images into a single, coherent scene.
- * 2. Animate that new scene to create a video, now with webhook support.
+ * Converts a data URI string into a Buffer.
  */
-export async function generateKissVideo(input: GenerateKissVideoInput): Promise<GenerateKissVideoOutput> {
-  console.log('[MAIN_FLOW] Starting two-step video generation process...');
+function dataUriToBuffer(uri: string): { buf: Buffer; mime: string } {
+  if (!uri.startsWith('data:')) {
+    throw new Error('Invalid data URI');
+  }
+  const commaIdx = uri.indexOf(',');
+  if (commaIdx === -1) {
+    throw new Error('Invalid data URI format');
+  }
+  const meta = uri.substring(5, commaIdx);
+  const data = uri.substring(commaIdx + 1);
 
-  // STEP 1: Fuse the two images
-  console.log('[MAIN_FLOW] Step 1: Fusing faces...');
-  const fusionResult = await fuseFaces({ image1Uri: input.image1Uri, image2Uri: input.image2Uri });
+  return {
+    buf: Buffer.from(data, 'base64'),
+    mime: meta.split(';')[0] || 'image/png',
+  };
+}
 
-  if (fusionResult.error || !fusionResult.fusedImageUri) {
-      console.error('[MAIN_FLOW_ERROR] Step 1 failed unexpectedly.', fusionResult.error);
-      return { error: `Image fusion failed: ${fusionResult.error || 'Unknown error'}` };
+/**
+ * Creates a side-by-side 16:9 collage from two image buffers.
+ */
+async function makeSideBySideCollage(leftBuf: Buffer, rightBuf: Buffer): Promise<Buffer> {
+  const W = 1920; // 16:9 aspect ratio width
+  const H = 1080; // 16:9 aspect ratio height
+  const panelW = Math.floor(W / 2);
+
+  const leftPanel = await sharp(leftBuf)
+    .resize(panelW, H, { fit: 'cover', position: 'center' })
+    .toBuffer();
+
+  const rightPanel = await sharp(rightBuf)
+    .resize(panelW, H, { fit: 'cover', position: 'center' })
+    .toBuffer();
+
+  return sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([
+      { input: leftPanel, left: 0, top: 0 },
+      { input: rightPanel, left: panelW, top: 0 },
+    ])
+    .png()
+    .toBuffer();
+}
+
+/**
+ * Extracts the base64 image data from the Google API response.
+ */
+function extractGoogleImage(data: any): { b64?: string; mime?: string } {
+  // For the :predict endpoint, the output is different.
+  const prediction = data?.predictions?.[0];
+  if (prediction?.bytesBase64Encoded) {
+      return { b64: prediction.bytesBase64Encoded, mime: 'image/png' };
   }
 
-  console.log('[MAIN_FLOW] Step 1 successful. Fused image created.');
+  // Fallback for :generateContent format, just in case.
+  const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
+  const imgPart = parts.find((p) => p?.inlineData);
+  if (imgPart) {
+    return {
+      b64: imgPart.inlineData.data,
+      mime: imgPart.inlineData.mimeType || 'image/png',
+    };
+  }
+  return {};
+}
 
-  // STEP 2: Initiate video generation with Pollo AI and track via Firestore
-  console.log('[MAIN_FLOW] Step 2: Animating the fused image with Pollo AI...');
+
+/**
+ * Main flow function: takes two images, creates a collage, and sends it to Google Vertex AI.
+ */
+export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
+  console.log('[FUSE_FACES_FLOW] Starting image fusion using Vertex AI API call.');
   
-  const generationDocRef = admin.db.collection('videoGenerations').doc();
-  const generationId = generationDocRef.id;
+  const admin = getFirebaseAdmin();
+  const projectId = admin.app.options.projectId;
+
+  if (!projectId) {
+    console.error('[FUSE_FACES_ERROR] Could not determine Project ID from Firebase Admin SDK.');
+    return { error: 'Server configuration error: Missing Project ID.' };
+  }
 
   try {
-    const bucket = admin.storage.bucket();
-    const fileName = `fused-images/${generationId}.png`;
-    const file = bucket.file(fileName);
-    const buffer = Buffer.from(fusionResult.fusedImageUri.split(',')[1], 'base64');
-    await file.save(buffer, { metadata: { contentType: 'image/png' } });
-    await file.makePublic();
-    const imageUrl = file.publicUrl(); // This is the public URL we need.
+    const { buf: buf1 } = dataUriToBuffer(input.image1Uri);
+    const { buf: buf2 } = dataUriToBuffer(input.image2Uri);
 
-    console.log(`[MAIN_FLOW] Fused image uploaded to Storage: ${imageUrl}`);
+    console.log('[FUSE_FACES_FLOW] Creating side-by-side collage.');
+    const collage = await makeSideBySideCollage(buf1, buf2);
+    const collageB64 = collage.toString('base64');
 
-    await generationDocRef.set({
-        id: generationId,
-        userId: input.userId, 
-        status: 'pending',
-        createdAt: FieldValue.serverTimestamp(),
-        sourceImageUrl: imageUrl, // The public URL is correctly saved here.
-    });
-    console.log(`[MAIN_FLOW] Created tracking document in Firestore with ID: ${generationId}`);
+    // FIX: Using a different model and a simplified API endpoint structure.
+    const model = 'gemini-1.5-pro-preview-0514';
+    const region = 'us-central1';
+    console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region}.`);
+    const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/models/${model}:predict`;
 
-    // Step 2c: Call Pollo AI with the public image URL and webhook
-    const url = 'https://pollo.ai/api/platform/generation/kling-ai/kling-v2-1';
-    const apiKey = process.env.POLLO_API_KEY || '<your-pollo-api-key>';
-    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/pollo-webhook`;
+    const prompt =
+      'From this collage, create a single, photorealistic 16:9 image. \n' +
+      'The final image should feature two people inspired by the collage. \n' +
+      'Place them side-by-side in a chest-up shot. Do not reproduce the collage itself. \n' +
+      'Aim for a neutral, clean studio background with soft, consistent lighting. Preserve the general likeness of the faces but create new, unique individuals.';
 
-    const options = {
-        method: 'POST',
-        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            webhookUrl: webhookUrl,
-            passthrough: JSON.stringify({ generationId: generationId }), 
-            input: {
-                image: imageUrl, 
-                prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
-            },
-        })
+    // The payload for the :predict endpoint has a different structure.
+    const payload = {
+      instances: [
+        {
+          prompt: prompt,
+          image: { bytesBase64Encoded: collageB64 },
+        },
+      ],
     };
 
-    const response = await fetch(url, options);
-    const data = await response.json();
+    const authRes = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
+      headers: { 'Metadata-Flavor': 'Google' },
+    });
+    const authJson = await authRes.json();
+    const accessToken = authJson.access_token;
 
-    if (!response.ok) {
-        console.error('[MAIN_FLOW_ERROR] Pollo AI API returned an error.', data);
-        await generationDocRef.update({ status: 'failed', error: data.message || 'Pollo API Error' }); 
-        return { error: `Video animation failed: ${data.message || 'Unknown error'}` };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[FUSE_FACES_ERROR] Google Vertex AI API error (${res.status}):`, errorBody);
+      return { error: `Image generation failed with status: ${res.status}` };
     }
 
-    const externalTaskId = data.data.taskId;
-    await generationDocRef.update({
-        status: 'processing',
-        externalTaskId: externalTaskId,
-    });
+    const json = await res.json();
+    const { b64, mime } = extractGoogleImage(json);
 
-    console.log(`[MAIN_FLOW] Task successfully submitted to Pollo AI. External Task ID: ${externalTaskId}`);
-    
-    // THE FINAL, CORRECT FIX: Return the public URL, not the base64 data URI.
-    return {
-      generationId: generationId,
-      status: 'processing',
-      sourceImageUri: imageUrl,
-    };
+    if (!b64) {
+      console.error('[FUSE_FACES_ERROR] No image data found in Vertex AI API response:', JSON.stringify(json));
+      return { error: 'Image generation failed: No image was returned.' };
+    }
 
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-    console.error(`[MAIN_FLOW_ERROR] An error occurred during video animation: ${errorMessage}`);
-    await generationDocRef.set({ status: 'failed', error: errorMessage }, { merge: true });
-    return { error: `Failed to animate the image: ${errorMessage}` };
+    console.log('[FUSE_FACES_FLOW] Image fusion successful.');
+    return { fusedImageUri: `data:${mime || 'image/png'};base64,${b64}` };
+
+  } catch (err: any) {
+    console.error('[FUSE_FACES_ERROR] An unexpected error occurred:', err);
+    return { error: err.message || 'An unknown error occurred during image fusion.' };
   }
 }
