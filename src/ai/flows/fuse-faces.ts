@@ -1,4 +1,3 @@
-
 'use server';
 
 import sharp from 'sharp';
@@ -97,20 +96,15 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const collage = await makeSideBySideCollage(buf1, buf2);
     const collageB64 = collage.toString('base64');
 
-    // FIX: Using a different model and a simplified API endpoint structure.
     const model = 'imagegeneration@006';
     const region = 'us-central1';
     console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region}.`);
     const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:predict`;
 
-    const prompt =
-      'From this collage, create a single, photorealistic 16:9 image. 
-' +
-      'The final image should feature two people inspired by the collage. 
-' +
-      'Place them side-by-side in a chest-up shot. Do not reproduce the collage itself. 
-' +
-      'Aim for a neutral, clean studio background with soft, consistent lighting. Preserve the general likeness of the faces but create new, unique individuals.';
+    const prompt = `From this collage, create a single, photorealistic 16:9 image.
+    The final image should feature two people inspired by the collage.
+    Place them side-by-side in a chest-up shot. Do not reproduce the collage itself.
+    Aim for a neutral, clean studio background with soft, consistent lighting. Preserve the general likeness of the faces but create new, unique individuals.`;
 
     // The payload for the :predict endpoint has a different structure.
     const payload = {
