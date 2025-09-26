@@ -96,34 +96,25 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const collage = await makeSideBySideCollage(buf1, buf2);
     const collageB64 = collage.toString('base64');
 
-    // FIX: Add a mask to the payload to use image-to-image generation
-    const maskBuffer = await sharp({
-      create: {
-        width: 1920,
-        height: 1080,
-        channels: 4,
-        background: { r: 255, g: 255, b: 255, alpha: 1 },
-      },
-    })
-      .png()
-      .toBuffer();
-    const maskB64 = maskBuffer.toString('base64');
-
-    const model = 'imagegeneration@006';
+    // Use the newer, more stable Imagen 3 model.
+    const model = 'imagen-3.0-generate-001';
     const region = 'us-central1';
-    console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region}.`);
+    console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region} with model ${model}.`);
     const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:predict`;
 
-    const prompt = `The image you will receive is split into two, with one person on each side. From these two people, you need to create a horizontal rectangle 9:16 image showing both of them side by side, facing forward,in the same proportion in a medium close-up (chest level). The blurred background should be simple and minimal, and the faces must remain faithful to the originals you received`;
+    const prompt = ` The image you will receive contains two people, with one person on each side.From these two people, you need to create a horizontal rectangle 9:16 image showing both of them side by side, framed from the chest up, both facing the camera following the rule of third.
+    Preserve the facial features, proportions, and natural look of the two people, try to copy them and keep fidelity to their original faces.
+    Use soft, natural lighting and a sharp, clean result.
+    Background should be neutral and slightly blurred (like a simple room or natural environment), so the focus stays on the faces.
+    Use realistic colors, natural skin tones, no distortion, no cartoon or artistic filters.
+    The two people should look like they posed side by side for a professional photo, with consistent lighting and style.`;
 
+    // The payload for image-to-image with newer models is simpler and doesn't require a mask.
     const payload = {
       instances: [
         {
           prompt: prompt,
           image: { bytesBase64Encoded: collageB64 },
-          mask: {
-            image: { bytesBase64Encoded: maskB64 },
-          },
         },
       ],
       parameters: {
