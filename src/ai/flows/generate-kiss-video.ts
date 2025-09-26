@@ -13,7 +13,7 @@ import { FieldValue } from 'firebase-admin/firestore';
  * 1. Fuse two separate images into a single, coherent scene.
  * 2. Animate that new scene to create a video, now with webhook support.
  */
-export async function generateKissVideo(input: GenerateKissVideoInput): Promise<GenerateKissVideoOutput> {
+export async function generateKissVideo(input: GenerateKissVideoInput, userId: string): Promise<GenerateKissVideoOutput> {
   console.log('[MAIN_FLOW] Starting two-step video generation process...');
 
   // STEP 1: Fuse the two images
@@ -46,7 +46,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
 
     await generationDocRef.set({
         id: generationId,
-        userId: input.userId, 
+        userId: userId, 
         status: 'pending',
         createdAt: FieldValue.serverTimestamp(),
         sourceImageUrl: imageUrl, // The public URL is correctly saved here.
