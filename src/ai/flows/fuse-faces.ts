@@ -1,4 +1,4 @@
-
+'''
 'use server';
 
 import sharp from 'sharp';
@@ -162,3 +162,4 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     return { error: err.message || 'An unknown error occurred during image fusion.' };
   }
 }
+''
