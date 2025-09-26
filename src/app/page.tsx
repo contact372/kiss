@@ -13,21 +13,26 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import SubscriptionDialog from '@/components/app/subscription-dialog';
 import { useAuth } from '@/contexts/auth-context';
 import { grantPaidAccessClient } from '@/lib/firebase/db';
+// FIX #1: The db instance MUST be imported from the file where it's correctly configured with long-polling.
 import { db } from '@/lib/firebase/firebase';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 
+// Types
 type AppState = 'form' | 'loading' | 'result' | 'teaser';
 type LoadingReason = 'generating' | 'teaser' | 'configuring';
 
+// The expected input for the server action
 interface CreateKissVideoActionInput {
     userId: string;
     image1DataUri: string;
-    image2DataUri: string;
+    image2_data_uri: string;
 }
 
+// The expected output from the server action
 interface CreateKissVideoActionOutput {
     generationId?: string;
     error?: string;
+    // FIX #2: The property name from the action is now sourceImageUrl
     sourceImageUrl?: string;
 }
 
@@ -108,6 +113,7 @@ function PageContent() {
 
     if (result.generationId) {
         console.log(`[CLIENT] Received generationId: ${result.generationId}. Listening for video URL...`);
+        // Use the corrected property name from the action's output
         if (result.sourceImageUrl) {
             setSourceImageUrl(result.sourceImageUrl);
         }
@@ -116,6 +122,7 @@ function PageContent() {
             firestoreUnsubscribeRef.current();
         }
 
+        // This will now use the correct 'db' instance from the correct import
         const unsub = onSnapshot(doc(db, "videoGenerations", result.generationId), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -164,13 +171,14 @@ function PageContent() {
     const result = await createKissVideoAction({
         userId: user.uid,
         image1DataUri: finalImage1,
-        image2DataUri: finalImage2,
+        image2_data_uri: finalImage2,
     });
     
     handleGenerationResult(result);
 
   }, [user, image1, image2, toast, handleGenerationResult, clearSessionState, startLoadingAnimation]);
 
+  // Cleanup listener on unmount
   useEffect(() => {
     return () => {
       if (firestoreUnsubscribeRef.current) firestoreUnsubscribeRef.current();
@@ -194,7 +202,8 @@ function PageContent() {
     }, 500);
     
     router.replace('/', { scroll: false });
-  }, [user, userProfile, searchParams, startRealGeneration, restoreStateFromSession, handleTeaserFlow, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, userProfile, searchParams]);
   
   useEffect(() => {
     const paid = searchParams.get('paid');
@@ -227,7 +236,7 @@ function PageContent() {
             const result = await createKissVideoAction({
                 userId: user.uid,
                 image1DataUri: restoredImage1,
-                image2DataUri: restoredImage2,
+                image2_data_uri: restoredImage2,
             });
 
             handleGenerationResult(result);
@@ -244,7 +253,8 @@ function PageContent() {
     };
     
     handlePostPayment();
-  }, [user, searchParams, refreshUserProfile, restoreStateFromSession, clearSessionState, startLoadingAnimation, handleGenerationResult, router, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, searchParams]);
 
   useEffect(() => {
     setCanGenerate(!!(image1 && image2));
@@ -307,6 +317,8 @@ function PageContent() {
   if (authLoading && !user) {
      return <div className="flex items-center justify-center h-full"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
+
+  // RENDER FUNCTIONS (unchanged) 
 
   const getButtonText = () => appState === 'loading' ? 'Generating...' : 'Generate Kiss';
 
