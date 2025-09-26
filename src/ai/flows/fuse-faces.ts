@@ -96,6 +96,19 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const collage = await makeSideBySideCollage(buf1, buf2);
     const collageB64 = collage.toString('base64');
 
+    // FIX: Add a mask to the payload to use image-to-image generation
+    const maskBuffer = await sharp({
+      create: {
+        width: 1920,
+        height: 1080,
+        channels: 4,
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const maskB64 = maskBuffer.toString('base64');
+
     const model = 'imagegeneration@006';
     const region = 'us-central1';
     console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region}.`);
@@ -106,12 +119,14 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     Place them side-by-side in a chest-up shot. Do not reproduce the collage itself.
     Aim for a neutral, clean studio background with soft, consistent lighting. Preserve the general likeness of the faces but create new, unique individuals.`;
 
-    // The payload for the :predict endpoint has a different structure.
     const payload = {
       instances: [
         {
           prompt: prompt,
           image: { bytesBase64Encoded: collageB64 },
+          mask: {
+            image: { bytesBase64Encoded: maskB64 },
+          },
         },
       ],
       parameters: {
