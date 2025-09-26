@@ -1,56 +1,104 @@
 'use server';
 /**
- * @fileOverview A flow for fusing two faces into a single scene using an image generation model.
+ * @fileOverview A multi-step flow that first fuses two images into one, 
+ * then generates a video from that fused image, managing state via Firestore.
  */
-import { ai } from '@/ai/genkit';
-import { FuseFacesInput, FuseFacesOutput } from './types'; // Import types
+import { fuseFaces } from './fuse-faces'; 
+import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
+import { admin } from '@/lib/firebase/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 /**
- * Takes two images, each with a face, and generates a new image
- * that combines both people side-by-side in a new scene.
+ * A two-step flow to generate a video:
+ * 1. Fuse two separate images into a single, coherent scene.
+ * 2. Animate that new scene to create a video, now with webhook support.
  */
-export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput> {
-  console.log('[FUSE_FACES_FLOW] Starting image fusion process...');
+export async function generateKissVideo(input: GenerateKissVideoInput): Promise<GenerateKissVideoOutput> {
+  console.log('[MAIN_FLOW] Starting two-step video generation process...');
+
+  // STEP 1: Fuse the two images
+  console.log('[MAIN_FLOW] Step 1: Fusing faces...');
+  const fusionResult = await fuseFaces({ image1Uri: input.image1Uri, image2Uri: input.image2Uri });
+
+  if (fusionResult.error || !fusionResult.fusedImageUri) {
+      console.error('[MAIN_FLOW_ERROR] Step 1 failed unexpectedly.', fusionResult.error);
+      return { error: `Image fusion failed: ${fusionResult.error || 'Unknown error'}` };
+  }
+
+  console.log('[MAIN_FLOW] Step 1 successful. Fused image created.');
+
+  // STEP 2: Initiate video generation with Pollo AI and track via Firestore
+  console.log('[MAIN_FLOW] Step 2: Animating the fused image with Pollo AI...');
+  
+  const generationDocRef = admin.db.collection('videoGenerations').doc();
+  const generationId = generationDocRef.id;
 
   try {
-    const { candidates } = await ai.generate({
-      model: 'googleai/imagen-2', // Correct, stable model identifier
-      prompt: [
-        {
-          text: `Create a new photorealistic 16:9 image in an American shot. The image must feature the person from the first input image and the person from the second input image. 
+    const bucket = admin.storage.bucket();
+    const fileName = `fused-images/${generationId}.png`;
+    const file = bucket.file(fileName);
+    const buffer = Buffer.from(fusionResult.fusedImageUri.split(',')[1], 'base64');
+    await file.save(buffer, { metadata: { contentType: 'image/png' } });
+    await file.makePublic();
+    const imageUrl = file.publicUrl(); // This is the public URL we need.
 
-They should be standing side-by-side against a simple, neutral background. The person from the first image should be on the left, and the person from the second image on the right. 
+    console.log(`[MAIN_FLOW] Fused image uploaded to Storage: ${imageUrl}`);
 
-Most importantly, you must faithfully reproduce the facial features of each person from their respective input images. Do not change their faces.`,
-        },
-        { media: { url: input.image1Uri } },
-        { media: { url: input.image2Uri } },
-      ],
-      config: {
-        // Additional configurations can be added here if needed
-      },
-      output: {
-        format: 'uri', // Request a data URI directly
-      }
+    await generationDocRef.set({
+        id: generationId,
+        userId: input.userId, 
+        status: 'pending',
+        createdAt: FieldValue.serverTimestamp(),
+        sourceImageUrl: imageUrl, // The public URL is correctly saved here.
     });
+    console.log(`[MAIN_FLOW] Created tracking document in Firestore with ID: ${generationId}`);
 
-    const firstCandidate = candidates[0];
+    // Step 2c: Call Pollo AI with the public image URL and webhook
+    const url = 'https://pollo.ai/api/platform/generation/kling-ai/kling-v2-1';
+    const apiKey = process.env.POLLO_API_KEY || '<your-pollo-api-key>';
+    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/pollo-webhook`;
 
-    if (!firstCandidate || !firstCandidate.media) {
-      console.error('[FUSE_FACES_FLOW_ERROR] The model did not return a valid image candidate.');
-      return { error: 'Image fusion failed to produce a result.' };
+    const options = {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            webhookUrl: webhookUrl,
+            passthrough: JSON.stringify({ generationId: generationId }), 
+            input: {
+                image: imageUrl, 
+                prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
+            },
+        })
+    };
+
+    const response = await fetch(url, options);
+    const data = await response.json();
+
+    if (!response.ok) {
+        console.error('[MAIN_FLOW_ERROR] Pollo AI API returned an error.', data);
+        await generationDocRef.update({ status: 'failed', error: data.message || 'Pollo API Error' }); 
+        return { error: `Video animation failed: ${data.message || 'Unknown error'}` };
     }
 
-    console.log('[FUSE_FACES_FLOW] Successfully generated fused image.');
+    const externalTaskId = data.data.taskId;
+    await generationDocRef.update({
+        status: 'processing',
+        externalTaskId: externalTaskId,
+    });
+
+    console.log(`[MAIN_FLOW] Task successfully submitted to Pollo AI. External Task ID: ${externalTaskId}`);
+    
+    // THE FINAL, CORRECT FIX: Return the public URL, not the base64 data URI.
     return {
-      fusedImageUri: firstCandidate.media.url,
+      generationId: generationId,
+      status: 'processing',
+      sourceImageUri: imageUrl,
     };
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-    console.error(`[FUSE_FACES_FLOW_ERROR] An error occurred during image fusion: ${errorMessage}`);
-    return {
-      error: `Failed to fuse images: ${errorMessage}`,
-    };
+    console.error(`[MAIN_FLOW_ERROR] An error occurred during video animation: ${errorMessage}`);
+    await generationDocRef.set({ status: 'failed', error: errorMessage }, { merge: true });
+    return { error: `Failed to animate the image: ${errorMessage}` };
   }
 }
