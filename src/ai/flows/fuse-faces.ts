@@ -1,3 +1,4 @@
+
 'use server';
 
 import sharp from 'sharp';
@@ -97,15 +98,18 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     const collageB64 = collage.toString('base64');
 
     // FIX: Using a different model and a simplified API endpoint structure.
-    const model = 'gemini-1.5-pro-preview-0514';
+    const model = 'imagegeneration@006';
     const region = 'us-central1';
     console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region}.`);
-    const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/models/${model}:predict`;
+    const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:predict`;
 
     const prompt =
-      'From this collage, create a single, photorealistic 16:9 image. \n' +
-      'The final image should feature two people inspired by the collage. \n' +
-      'Place them side-by-side in a chest-up shot. Do not reproduce the collage itself. \n' +
+      'From this collage, create a single, photorealistic 16:9 image. 
+' +
+      'The final image should feature two people inspired by the collage. 
+' +
+      'Place them side-by-side in a chest-up shot. Do not reproduce the collage itself. 
+' +
       'Aim for a neutral, clean studio background with soft, consistent lighting. Preserve the general likeness of the faces but create new, unique individuals.';
 
     // The payload for the :predict endpoint has a different structure.
@@ -116,6 +120,9 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
           image: { bytesBase64Encoded: collageB64 },
         },
       ],
+      parameters: {
+        sampleCount: 1,
+      },
     };
 
     const authRes = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
