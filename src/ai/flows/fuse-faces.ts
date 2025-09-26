@@ -22,8 +22,8 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
           The background should be a romantic, dimly lit, urban rooftop at night, with a soft bokeh effect on the city lights behind them.
           The overall mood should be intimate and heartfelt.`,
         },
-        { media: { url: input.person1ImageUrl } },
-        { media: { url: input.person2ImageUrl } },
+        { media: { url: input.image1Uri } },
+        { media: { url: input.image2Uri } },
       ],
       config: {
         temperature: 0.7,
