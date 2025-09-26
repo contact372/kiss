@@ -102,11 +102,11 @@ export async function fuseFaces(input: FuseFacesInput): Promise<FuseFacesOutput>
     console.log(`[FUSE_FACES_FLOW] Calling Google Vertex AI API in ${region} with model ${model}.`);
     const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:predict`;
 
-    const prompt = ` The image you will receive contains two people, with one person on each side.From these two people, you need to create a horizontal rectangle 9:16 image showing both of them side by side, framed from the chest up, both facing the camera following the rule of third.
-    Preserve the facial features, proportions, and natural look of the two people, try to copy them and keep fidelity to their original faces.
+    const prompt = ` The image you will receive contains two people. you need to create a horizontal rectangle 9:16 image showing both of them side by side horizontaly  like a single professionnal picture, framed from the chest up, both facing the camera following the rule of third.
+    Preserve the facial features, proportions, and natural look of the two people,don't change their faces, you have to be the most faithful possible.
     Use soft, natural lighting and a sharp, clean result.
     Background should be neutral and slightly blurred (like a simple room or natural environment), so the focus stays on the faces.
-    Use realistic colors, natural skin tones, no distortion, no cartoon or artistic filters.
+    Use realistic colors, natural skin tones, no distortion, no cartoon or artistic filters, this has to look like a true professional photo.
     The two people should look like they posed side by side for a professional photo, with consistent lighting and style.`;
 
     // The payload for image-to-image with newer models is simpler and doesn't require a mask.
