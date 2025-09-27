@@ -67,7 +67,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
             passthrough: JSON.stringify({ generationId: generationId }), 
             input: {
                 image: imageUrl, 
-                prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality. Shot with static camera that doesnt move',
+                prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality. Shot with static camera that doesnt move, only the people are moving, the camera is not shaking',
             },
         })
     };
