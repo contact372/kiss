@@ -28,7 +28,7 @@ export function KissGenerator() {
 
     useEffect(() => {
         if (isLoading) {
-            const totalDuration = 40000; // 40 seconds
+            const totalDuration = 64000; // 64 seconds
             const updateInterval = 100; // ms
             const increment = 95 / (totalDuration / updateInterval);
 
