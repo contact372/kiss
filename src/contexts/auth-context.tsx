@@ -1,11 +1,10 @@
-
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, type ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getFirebaseAuth } from '@/lib/firebase/firebase';
+import { auth } from '@/lib/firebase/firebase'; // Correctly import the auth instance
 import { Loader2 } from 'lucide-react';
-import { checkUserSubscription } from '@/lib/firebase/db';
+import { getUserProfile } from '@/lib/firebase/db'; // Use the new function
 import type { UserProfile } from '@/lib/firebase/types';
 
 interface AuthContextType {
@@ -25,21 +24,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refreshUserProfile = useCallback(async () => {
     if (user) {
         console.log('[AUTH_CONTEXT] Refreshing user profile for UID:', user.uid);
-        const profile = await checkUserSubscription(user.uid);
+        const profile = await getUserProfile(user.uid); // Use the new function
         setUserProfile(profile);
         return profile;
     }
     return null;
   }, [user]);
 
-
   useEffect(() => {
-    const auth = getFirebaseAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => { // Use the imported auth instance directly
       setLoading(true);
       setUser(user);
       if (user) {
-        const profile = await checkUserSubscription(user.uid);
+        const profile = await getUserProfile(user.uid); // Use the new function
         setUserProfile(profile);
       } else {
         setUserProfile(null);
@@ -50,8 +47,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
   
-  // The loading screen is shown only once during initial auth check.
-  // Subsequent navigations will not re-trigger this.
   if (loading) {
     return (
         <div className="flex items-center justify-center h-screen w-full">
