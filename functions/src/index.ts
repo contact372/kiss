@@ -1,7 +1,7 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
-import * as cors from "cors";
+import cors = require("cors");
 
 // Initialize the Firebase Admin SDK.
 admin.initializeApp();
