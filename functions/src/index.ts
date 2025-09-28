@@ -1,44 +1,57 @@
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { logger } from "firebase-functions";
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+import * as cors from "cors";
 
-// Initialize Firebase Admin SDK
-initializeApp();
-const db = getFirestore();
+// Initialize the Firebase Admin SDK.
+admin.initializeApp();
+const db = admin.firestore();
 
-// Define the callable function
-export const grantPaidAccess = onCall({ cors: true }, async (request) => {
-  // Check if the user is authenticated
-  if (!request.auth) {
-    throw new HttpsError(
-      "unauthenticated",
-      "The function must be called while authenticated.",
-    );
-  }
+// Create a CORS middleware handler.
+// By default, this will allow requests from any origin.
+// For production, you should restrict this to your app's domain.
+const corsHandler = cors({ origin: true });
 
-  const uid = request.auth.uid;
-  const userRef = db.collection("users").doc(uid);
+export const grantPaidAccess = functions.https.onRequest((req, res) => {
+  // Wrap the main logic in the CORS handler.
+  corsHandler(req, res, async () => {
+    // We expect a POST request.
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
 
-  logger.info(`Granting paid access to user: ${uid}`);
+    // Get the ID token from the Authorization header.
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("No Bearer token in authorization header.");
+      res.status(401).send("Unauthorized");
+      return;
+    }
 
-  try {
-    // Update the user's document in Firestore
-    await userRef.set(
-      {
-        isSubscribed: true,
-        updatedAt: new Date(),
-      },
-      { merge: true },
-    );
+    const idToken = authHeader.split("Bearer ")[1];
 
-    logger.info(`Successfully granted paid access to user: ${uid}`);
-    return { success: true };
-  } catch (error) {
-    logger.error(`Failed to grant paid access to user: ${uid}`, error);
-    throw new HttpsError(
-      "internal",
-      "An error occurred while granting paid access.",
-    );
-  }
+    try {
+      // Verify the ID token.
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const uid = decodedToken.uid;
+
+      // Update the user's document in Firestore.
+      const userRef = db.collection("users").doc(uid);
+      await userRef.update({
+        hasPaid: true,
+      });
+
+      console.log(`Successfully granted paid access to user: ${uid}`);
+      res.status(200).json({ success: true, message: "User status updated to paid." });
+
+    } catch (error) {
+      console.error("Error granting paid access:", error);
+      // Check if the error is an auth error
+      if (error.code?.startsWith('auth/')) {
+        res.status(403).send("Forbidden: Invalid authentication token.");
+      } else {
+        res.status(500).send("Internal Server Error");
+      }
+    }
+  });
 });
