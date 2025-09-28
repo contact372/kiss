@@ -1,18 +1,20 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
+import * as cors from "cors";
 
 // Initialize the Firebase Admin SDK.
 admin.initializeApp();
 
-export const grantPaidAccess = onRequest(
-  // Options object: configure CORS to allow any origin
-  { cors: true },
-  // Handler function
-  async (req, res) => {
+// Initialize CORS middleware.
+const corsHandler = cors({ origin: true });
+
+export const grantPaidAccess = onRequest(async (req, res) => {
+  // Handle CORS for preflight requests.
+  corsHandler(req, res, async () => {
     // We only expect POST requests for this function.
     if (req.method !== "POST") {
-      logger.warn("Received non-POST request");
+      logger.warn(`Received non-POST request: ${req.method}`);
       res.status(405).send("Method Not Allowed");
       return;
     }
@@ -33,24 +35,32 @@ export const grantPaidAccess = onRequest(
       const uid = decodedToken.uid;
       logger.info(`Verified token for UID: ${uid}`);
 
-      // Update the user's document in Firestore.
+      // Reference to the user's document in Firestore.
       const userRef = admin.firestore().collection("users").doc(uid);
-      await userRef.update({
-        hasPaid: true,
+
+      // Use a transaction to safely update the user's credits.
+      await admin.firestore().runTransaction(async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        const currentCredits = userDoc.data()?.credits || 0;
+        const newCredits = currentCredits + 100; // Add 100 credits.
+        
+        transaction.update(userRef, {
+          hasPaid: true, // Keep this for backward compatibility or other checks.
+          credits: newCredits,
+        });
       });
 
-      logger.info(`Successfully granted paid access to user: ${uid}`);
-      res.status(200).json({ success: true, message: "User status updated to paid." });
+      logger.info(`Successfully granted 100 credits to user: ${uid}`);
+      res.status(200).json({ success: true, message: "User credits updated." });
 
-    } catch (error: any) { // <--- THIS IS THE FIX
+    } catch (error: any) {
       logger.error("Error granting paid access:", error);
-      // Check if the error is an auth error from token verification
-      // The error object from verifyIdToken has a 'code' property
-      if (error.code && error.code.startsWith('auth/')) {
+      // Check if the error is an auth error from token verification.
+      if (error.code && error.code.startsWith("auth/")) {
         res.status(403).send("Forbidden: Invalid authentication token.");
       } else {
         res.status(500).send("Internal Server Error");
       }
     }
-  }
-);
+  });
+});
