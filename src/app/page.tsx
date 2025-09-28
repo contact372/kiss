@@ -80,7 +80,7 @@ function PageContent() {
     } catch (e) { console.error("Failed to clear state", e); }
   }, []);
   
-  const startLoadingAnimation = (reason: LoadingReason = 'generating', duration: number = 64000) => {
+  const startLoadingAnimation = (reason: LoadingReason = 'generating', duration: number = 40000) => {
     setLoadingReason(reason);
     setAppState('loading');
     setProgress(0);
@@ -165,7 +165,7 @@ function PageContent() {
         return;
     }
     
-    startLoadingAnimation('generating', 69000);
+    startLoadingAnimation('generating', 45000);
     clearSessionState();
 
     const result = await createKissVideoAction({
