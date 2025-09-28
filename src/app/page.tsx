@@ -12,8 +12,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import SubscriptionDialog from '@/components/app/subscription-dialog';
 import { useAuth } from '@/contexts/auth-context';
-import { db, functions } from '@/lib/firebase/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { db } from '@/lib/firebase/firebase';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 
 // Types
@@ -214,8 +213,28 @@ function PageContent() {
         try {
             const { restoredImage1, restoredImage2 } = restoreStateFromSession();
 
-            const grantAccess = httpsCallable(functions, 'grantPaidAccess');
-            await grantAccess();
+            // Get the user's ID token
+            const idToken = await user.getIdToken();
+
+            // Call the grantPaidAccess function using fetch
+            const response = await fetch('https://europe-west1-eternal-kiss.cloudfunctions.net/grantPaidAccess', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`,
+                },
+                body: JSON.stringify({}), // Body can be empty as UID is from token
+            });
+
+            if (!response.ok) {
+                let errorData;
+                try {
+                  errorData = await response.json();
+                } catch (e) {
+                  throw new Error(`Server responded with ${response.status}`);
+                }
+                throw new Error(errorData.message || 'Failed to grant paid access.');
+            }
 
             await refreshUserProfile();
             toast({ variant: 'default', title: 'Account Upgraded!', description: 'Starting video generation...' });
