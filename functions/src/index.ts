@@ -1,14 +1,12 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import * as cors from "cors";
+import cors from "cors"; // Correction 1: Changed import style
 
 // Initialize the Firebase Admin SDK.
 admin.initializeApp();
 const db = admin.firestore();
 
 // Create a CORS middleware handler.
-// By default, this will allow requests from any origin.
-// For production, you should restrict this to your app's domain.
 const corsHandler = cors({ origin: true });
 
 export const grantPaidAccess = functions.https.onRequest((req, res) => {
@@ -44,7 +42,7 @@ export const grantPaidAccess = functions.https.onRequest((req, res) => {
       console.log(`Successfully granted paid access to user: ${uid}`);
       res.status(200).json({ success: true, message: "User status updated to paid." });
 
-    } catch (error) {
+    } catch (error: any) { // Correction 2: Typed error as any
       console.error("Error granting paid access:", error);
       // Check if the error is an auth error
       if (error.code?.startsWith('auth/')) {
