@@ -3,18 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
 
 // --- Configuration du Firebase Admin SDK ---
-// Cette section vérifie si l'app a déjà été initialisée.
-// C'est crucial dans l'environnement serverless de Next.js pour éviter les erreurs.
+// On vérifie si l'app a déjà été initialisée pour éviter les erreurs.
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-    databaseURL: `https://gemini-api.firebaseio.com`
-  });
+  // Lorsqu'on est sur Google Cloud (Cloud Run), appeler initializeApp() sans argument
+  // permet au SDK de découvrir automatiquement la configuration du projet depuis l'environnement.
+  // C'est la méthode recommandée et la plus propre.
+  admin.initializeApp();
 }
 
 /**
- * Cette fonction est notre nouvel "endpoint" API.
- * Elle remplace entièrement la Cloud Function.
+ * API endpoint pour mettre à jour le statut d'un utilisateur après paiement.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -26,17 +24,17 @@ export async function POST(req: NextRequest) {
     const idToken = authHeader.split('Bearer ')[1];
 
     // 2. Vérifier le token pour authentifier l'utilisateur.
+    // Cette étape va maintenant fonctionner car le SDK est correctement initialisé.
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     const uid = decodedToken.uid;
 
     // 3. Mettre à jour le document de l'utilisateur dans Firestore.
     const userRef = admin.firestore().collection("users").doc(uid);
     
-    // Utiliser une transaction pour la sécurité des données.
     await admin.firestore().runTransaction(async (transaction) => {
       const userDoc = await transaction.get(userRef);
       const currentCredits = userDoc.data()?.credits || 0;
-      const newCredits = currentCredits + 100; // Ajoute 100 crédits
+      const newCredits = currentCredits + 100;
 
       transaction.update(userRef, {
         hasPaid: true,
@@ -49,9 +47,9 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('--- ERROR IN /api/grant-access ---', error);
-    // Gérer les erreurs spécifiques (token invalide, etc.)
+    // Gérer les erreurs spécifiques de Firebase Auth
     if (error.code && error.code.startsWith('auth/')) {
-      return NextResponse.json({ success: false, message: 'Forbidden: Invalid authentication token.' }, { status: 403 });
+      return NextResponse.json({ success: false, message: `Forbidden: Invalid authentication token. (Reason: ${error.message})` }, { status: 403 });
     }
     return NextResponse.json({ success: false, message: 'Internal Server Error' }, { status: 500 });
   }
