@@ -14,7 +14,7 @@ import {
 import { Home, User, Settings, FileText, Shield, LogOut, PanelRight, Video, Crown } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
-import { getFirebaseAuth } from '@/lib/firebase/firebase';
+import { auth } from '@/lib/firebase/firebase'; // <-- CORRECTED IMPORT
 import { signOut } from 'firebase/auth';
 import { Logo } from '../icons/logo';
 import { Button } from '../ui/button';
@@ -29,8 +29,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     console.log("Logout button clicked. Attempting to sign out...");
     try {
-      const auth = getFirebaseAuth();
-      await signOut(auth);
+      await signOut(auth); // <-- SIMPLIFIED USAGE
       console.log("Firebase signOut successful. Redirecting...");
       window.location.href = '/';
     } catch (error) {
