@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -55,18 +56,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </Button>
             {user && (
-              <>
                  <Button asChild variant={pathname === '/account' ? 'secondary' : 'ghost'} className="w-full justify-start">
                     <Link href="/account" onClick={handleLinkClick}>
                     <Settings className="mr-2 h-4 w-4" />
                     My Account
                     </Link>
                 </Button>
-                <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Log out
-                </Button>
-              </>
             )}
             {user && userProfile && (
               <div className="flex items-center justify-between rounded-lg border px-3 py-2">
@@ -105,7 +100,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <div className="h-4 w-24 bg-muted animate-pulse rounded-md" />
                 </div>
             </div>
-          ) : !user && (
+          ) : user ? (
+            <>
+              <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </Button>
+              <div className="flex items-center gap-3 rounded-md border p-2">
+                <Avatar className="h-9 w-9">
+                  {user.photoURL && <AvatarImage src={user.photoURL} alt="User avatar" />}
+                  <AvatarFallback>{getInitials(user.displayName || user.email)}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 overflow-hidden space-y-1">
+                  <p className="truncate text-sm font-medium">{user.displayName || user.email}</p>
+                  {userProfile?.isSubscribed && (
+                      <Badge variant="secondary" className="text-xs text-primary font-bold">
+                          <Crown className="mr-1 h-3 w-3" />
+                          Pro Account
+                      </Badge>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
             <Button asChild variant="ghost" className="w-full justify-start">
                 <Link href="/login" onClick={handleLinkClick}>
                   <User className="mr-2 h-4 w-4" />
