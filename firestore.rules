@@ -2,22 +2,23 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Règle pour les profils utilisateurs
+
+    // Les utilisateurs ne peuvent lire et écrire que sur leur propre document.
+    // Ils ne peuvent pas s'attribuer de statut payant ou modifier des champs immuables.
     match /users/{userId} {
-      allow read: if true;
-      allow write: if request.auth.uid == userId;
+      allow read, create: if request.auth != null && request.auth.uid == userId;
+
+      // Les utilisateurs peuvent mettre à jour leur document, mais NE PEUVENT PAS écrire sur des champs protégés.
+      // Toutes les modifications d'abonnement/crédits DOIVENT être gérées par le serveur.
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && !request.resource.data.keys().hasAny(['isSubscribed', 'credits', 'subscriptionEndDate', 'uid', 'createdAt']);
     }
 
-    // Règle pour les générations de vidéos
+    // Les utilisateurs ne peuvent lire que les documents de génération qui leur appartiennent.
+    // Le serveur est responsable de la création et de la mise à jour de ces documents.
     match /videoGenerations/{generationId} {
-      // Tout utilisateur authentifié peut créer un document de génération.
-      allow create: if request.auth != null;
-      
-      // Seul l'utilisateur qui a créé la génération (dont l'ID est dans `userId`)
-      // est autorisé à lire le document complet (y compris le champ `videoUrl`)
-      // ou à le mettre à jour.
-      allow read, update: if request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false; // Interdire explicitement les écritures depuis le client
     }
   }
 }
