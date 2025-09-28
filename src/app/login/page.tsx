@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, type UserCredential } from 'firebase/auth';
-import { getFirebaseAuth } from '@/lib/firebase/firebase';
+import { auth } from '@/lib/firebase/firebase'; // Correctly import the auth instance
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,7 +60,6 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const auth = getFirebaseAuth();
       let userCredential: UserCredential;
       if (isLogin) {
         userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -79,7 +78,6 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
-    const auth = getFirebaseAuth();
     const provider = new GoogleAuthProvider();
     try {
         const userCredential = await signInWithPopup(auth, provider);
