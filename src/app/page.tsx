@@ -77,7 +77,7 @@ function PageContent() {
     } catch (e) { console.error("Failed to clear state", e); }
   }, []);
   
-  const startLoadingAnimation = (reason: LoadingReason = 'generating', duration: number = 40000) => {
+  const startLoadingAnimation = (reason: LoadingReason = 'generating', duration: number = 69000) => {
     setLoadingReason(reason);
     setAppState('loading');
     setProgress(0);
@@ -160,7 +160,7 @@ function PageContent() {
         return;
     }
     
-    startLoadingAnimation('generating', 45000);
+    startLoadingAnimation('generating', 69000);
     clearSessionState();
 
     const result = await createKissVideoAction({
@@ -217,7 +217,7 @@ function PageContent() {
             const idToken = await user.getIdToken();
 
             // Call the grantPaidAccess function using fetch
-            const response = await fetch('https://europe-west1-eternal-kiss.cloudfunctions.net/grantPaidAccess', {
+            const response = await fetch('/api/grant-access', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
