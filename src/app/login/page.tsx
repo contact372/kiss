@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -8,18 +7,29 @@ import { getFirebaseAuth } from '@/lib/firebase/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronDown } from 'lucide-react';
 import { updateUserProfile } from '@/lib/firebase/db';
 import Link from 'next/link';
+
+// SVG component for the colored Google Icon
+const GoogleIcon = () => (
+    <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
+);
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showEmailForm, setShowEmailForm] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const defaultTab = searchParams.get('tab') || 'login';
@@ -38,7 +48,6 @@ export default function LoginPage() {
     
     toast({ title: 'Success!', description: 'Redirecting...' });
     
-    // If the user came from the teaser flow, redirect them back to the home page with a param.
     if (startTeaser) {
       router.push('/?start_teaser=true');
     } else {
@@ -100,53 +109,54 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor={isLogin ? 'email-login' : 'email-signup'}>Email</Label>
-                <Input
-                id={isLogin ? 'email-login' : 'email-signup'}
-                type="email"
-                placeholder="m@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-                />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor={isLogin ? 'password-login' : 'password-signup'}>Password</Label>
-                <Input
-                id={isLogin ? 'password-login' : 'password-signup'}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
-                />
-            </div>
-             <Button 
-                onClick={() => handleAuth(isLogin)} 
-                className="w-full"
-                variant={isFormFilled ? "secondary" : "ghost"}
-                disabled={loading || !isFormFilled}
-            >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isLogin ? 'Sign In' : 'Create Account')}
-            </Button>
-            <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                    Or
-                    </span>
-                </div>
-            </div>
             <Button className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white" onClick={handleGoogleSignIn} disabled={loading}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 
-                <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 126 23.4 172.9 61.9l-76.2 74.8C307.2 99.4 280.7 86 248 86c-84.3 0-152.3 68.3-152.3 152.3s68 152.3 152.3 152.3c99.2 0 129.2-74.4 133.2-111.8H248v-85.3h236.1c2.3 12.7 3.9 26.9 3.9 41.4z"></path></svg>
-                }
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GoogleIcon />}
                 {isLogin ? 'Sign in with Google' : 'Sign up with Google'}
             </Button>
+
+            <div 
+                className="text-center text-sm text-muted-foreground underline cursor-pointer flex items-center justify-center"
+                onClick={() => setShowEmailForm(!showEmailForm)}
+            >
+                or with email
+                <ChevronDown className={`ml-1 h-4 w-4 transition-transform ${showEmailForm ? 'rotate-180' : ''}`} />
+            </div>
+
+            <div className={`transition-all duration-300 ease-in-out overflow-hidden ${showEmailForm ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'}`}>
+              <div className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                      <Label htmlFor={isLogin ? 'email-login' : 'email-signup'}>Email</Label>
+                      <Input
+                      id={isLogin ? 'email-login' : 'email-signup'}
+                      type="email"
+                      placeholder="m@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={loading}
+                      />
+                  </div>
+                  <div className="space-y-2">
+                      <Label htmlFor={isLogin ? 'password-login' : 'password-signup'}>Password</Label>
+                      <Input
+                      id={isLogin ? 'password-login' : 'password-signup'}
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                      />
+                  </div>
+                  <Button 
+                      onClick={() => handleAuth(isLogin)} 
+                      className="w-full"
+                      variant={isFormFilled ? "secondary" : "ghost"}
+                      disabled={loading || !isFormFilled}
+                  >
+                      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isLogin ? 'Sign In' : 'Create Account')}
+                  </Button>
+              </div>
+            </div>
         </CardContent>
       </Card>
   );
