@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Sheet,
   SheetContent,
@@ -23,11 +23,13 @@ import { Badge } from '../ui/badge';
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, userProfile, loading } = useAuth();
   const pathname = usePathname();
+  const router = useRouter(); // <-- Add this
   const [open, setOpen] = React.useState(false);
 
   const handleLogout = async () => {
     const auth = getFirebaseAuth();
     await signOut(auth);
+    router.push('/'); // <-- And this
     setOpen(false); // Close sidebar on logout
   };
 
