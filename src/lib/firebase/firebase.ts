@@ -1,58 +1,21 @@
 
-// src/lib/firebase/firebase.ts
-// This file is strictly for CLIENT-SIDE Firebase initialization.
-
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
-// We switch from getFirestore to initializeFirestore to pass in custom settings.
-import { initializeFirestore, type Firestore } from 'firebase/firestore';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { firebaseConfig } from './config';
 
-let app: FirebaseApp;
-let auth: Auth;
-let db: Firestore;
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
+const auth = getAuth(app);
+const functions = getFunctions(app);
 
-// This check ensures Firebase is only initialized on the client side.
-if (typeof window !== 'undefined') {
-    if (getApps().length === 0) {
-        app = initializeApp(firebaseConfig);
-    } else {
-        app = getApp();
-    }
-    auth = getAuth(app);
-
-    // HERE IS THE CORRECTED FIX:
-    // We force the Firestore client to use long-polling. This is a workaround
-    // for a known issue with some development environments (like local emulators
-    // behind certain proxies or Docker configurations) where modern real-time
-    // connections (WebSockets/HTTP2) fail. Long-polling is a more robust, albeit
-    // slightly less efficient, alternative that solves the "Transport failed" error.
-    db = initializeFirestore(app, {
-      experimentalForceLongPolling: true
-    });
+// Connect to emulators in development
+if (process.env.NODE_ENV === 'development') {
+    // Point to the emulators running on localhost.
+    connectFirestoreEmulator(db, 'localhost', 8080);
+    connectAuthEmulator(auth, 'http://localhost:9099');
+    connectFunctionsEmulator(functions, 'localhost', 5001);
 }
 
-// We also export the initialized db instance directly for convenience
-export { db };
-
-// These functions are intended for client-side use only.
-export function getFirebaseApp(): FirebaseApp {
-    if (!app) {
-        throw new Error("Firebase app is not initialized. This function should only be called on the client side.");
-    }
-    return app;
-}
-
-export function getFirebaseAuth(): Auth {
-    if (!auth) {
-        throw new Error("Firebase auth is not initialized. This function should only be called on the client side.");
-    }
-    return auth;
-}
-
-export function getFirestoreDb(): Firestore {
-    if (!db) {
-        throw new Error("Firestore is not initialized. This function should only be called on the client side.");
-    }
-    return db;
-}
+export { app, db, auth, functions };
