@@ -27,10 +27,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
 
   const handleLogout = async () => {
-    const auth = getFirebaseAuth();
-    await signOut(auth);
-    window.location.href = '/'; // <-- THIS IS THE FIX
-    setOpen(false); // Close sidebar on logout
+    console.log("Logout button clicked. Attempting to sign out...");
+    try {
+      const auth = getFirebaseAuth();
+      await signOut(auth);
+      console.log("Firebase signOut successful. Redirecting...");
+      window.location.href = '/';
+    } catch (error) {
+      console.error("Error during logout:", error);
+    }
   };
 
   const getInitials = (name?: string | null) => {
