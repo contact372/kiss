@@ -23,13 +23,13 @@ import { Badge } from '../ui/badge';
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, userProfile, loading } = useAuth();
   const pathname = usePathname();
-  const router = useRouter(); // <-- Add this
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
 
   const handleLogout = async () => {
     const auth = getFirebaseAuth();
     await signOut(auth);
-    router.push('/'); // <-- And this
+    window.location.href = '/'; // <-- THIS IS THE FIX
     setOpen(false); // Close sidebar on logout
   };
 
