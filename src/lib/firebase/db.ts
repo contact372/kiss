@@ -1,5 +1,5 @@
 
-import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase'; // Make sure this points to your initialized firebase config
 import type { UserProfile } from './types';
 
@@ -12,7 +12,21 @@ export const updateUserProfile = async (uid: string, userData: Partial<UserProfi
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, { 
     ...userData,
-    createdAt: serverTimestamp(), // Set the creation time on the initial write
-    updatedAt: serverTimestamp()  // Always update the last modified time
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
   }, { merge: true });
+};
+
+/**
+ * Fetches a user's profile from Firestore.
+ * @param uid - The user's unique ID.
+ * @returns The user's profile data or null if not found.
+ */
+export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
+  const userRef = doc(db, 'users', uid);
+  const docSnap = await getDoc(userRef);
+  if (docSnap.exists()) {
+    return docSnap.data() as UserProfile;
+  }
+  return null;
 };
