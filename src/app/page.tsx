@@ -12,9 +12,8 @@ import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import SubscriptionDialog from '@/components/app/subscription-dialog';
 import { useAuth } from '@/contexts/auth-context';
-import { grantPaidAccessClient } from '@/lib/firebase/db';
-// FIX #1: The db instance MUST be imported from the file where it's correctly configured with long-polling.
-import { db } from '@/lib/firebase/firebase';
+import { db, functions } from '@/lib/firebase/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 
 // Types
@@ -32,7 +31,6 @@ interface CreateKissVideoActionInput {
 interface CreateKissVideoActionOutput {
     generationId?: string;
     error?: string;
-    // FIX #2: The property name from the action is now sourceImageUrl
     sourceImageUrl?: string;
 }
 
@@ -113,7 +111,6 @@ function PageContent() {
 
     if (result.generationId) {
         console.log(`[CLIENT] Received generationId: ${result.generationId}. Listening for video URL...`);
-        // Use the corrected property name from the action's output
         if (result.sourceImageUrl) {
             setSourceImageUrl(result.sourceImageUrl);
         }
@@ -122,7 +119,6 @@ function PageContent() {
             firestoreUnsubscribeRef.current();
         }
 
-        // This will now use the correct 'db' instance from the correct import
         const unsub = onSnapshot(doc(db, "videoGenerations", result.generationId), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -218,7 +214,9 @@ function PageContent() {
         try {
             const { restoredImage1, restoredImage2 } = restoreStateFromSession();
 
-            await grantPaidAccessClient(user.uid);
+            const grantAccess = httpsCallable(functions, 'grantPaidAccess');
+            await grantAccess();
+
             await refreshUserProfile();
             toast({ variant: 'default', title: 'Account Upgraded!', description: 'Starting video generation...' });
             
