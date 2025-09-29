@@ -8,7 +8,6 @@ import { createKissVideoAction } from './actions';
 import { Button } from '@/components/ui/button';
 import { Loader2, Wand2, ArrowLeft, Eye, Download } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
-import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import SubscriptionDialog from '@/components/app/subscription-dialog';
 import { useAuth } from '@/contexts/auth-context';
@@ -292,7 +291,6 @@ function PageContent() {
             const img1 = new window.Image();
             const img2 = new window.Image();
 
-            // This setup ensures that the Promise.all waits for the image to be fully loaded or for an error to occur.
             const loadPromise1 = new Promise(res => { img1.onload = res; img1.onerror = res; });
             const loadPromise2 = new Promise(res => { img2.onload = res; img2.onerror = res; });
 
@@ -300,8 +298,6 @@ function PageContent() {
             img2.src = img2Src;
 
             Promise.all([loadPromise1, loadPromise2]).then(() => {
-                // **THE FIX**: Verify that images have actually loaded by checking their width.
-                // If an image fails to load, its naturalWidth will be 0.
                 if (img1.naturalWidth === 0 || img2.naturalWidth === 0) {
                     console.error("[CLIENT] Teaser fusion failed: One or both images could not be loaded.");
                     return fallback();
@@ -310,12 +306,11 @@ function PageContent() {
                 canvas.width = 1280;
                 canvas.height = 720;
 
-                // This drawing logic might stretch images, but it ensures both are visible.
                 ctx.drawImage(img1, 0, 0, 640, 720);
                 ctx.drawImage(img2, 640, 0, 640, 720);
 
                 resolve(canvas.toDataURL('image/jpeg'));
-            }).catch(fallback); // Fallback if the promise itself rejects for any reason.
+            }).catch(fallback);
         });
     };
 
@@ -325,7 +320,6 @@ function PageContent() {
             const fusedTeaserImage = await fuseImagesForTeaser(image1, image2);
             setSourceImageUrl(fusedTeaserImage);
         } else {
-            // Fallback to whichever image exists if one is missing.
             setSourceImageUrl(image2 || image1);
         }
         setAppState('teaser');
@@ -378,8 +372,6 @@ function PageContent() {
      return <div className="flex items-center justify-center h-full"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
-  // RENDER FUNCTIONS (unchanged) 
-
   const getButtonText = () => appState === 'loading' ? 'Generating...' : 'Generate Kiss';
 
   const renderLoadingState = () => {
@@ -416,7 +408,8 @@ function PageContent() {
       <CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Unlock your video to see the magic moment.</CardDescription></CardHeader>
       <CardContent className="p-4 pt-0">
         <div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">
-            <Image src={sourceImageUrl || 'https://placehold.co/1280x720.png'} alt="Blurred preview" width={1280} height={720} className="w-full h-full object-cover filter blur-lg scale-110"/>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={sourceImageUrl || 'https://placehold.co/1280x720.png'} alt="Blurred preview" width="1280" height="720" className="w-full h-full object-cover filter blur-lg scale-110"/>
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center"><Button onClick={handleSeeVideo} size="lg" className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"><Eye className="mr-2 h-5 w-5" />See the Video</Button></div>
         </div>
       </CardContent>
