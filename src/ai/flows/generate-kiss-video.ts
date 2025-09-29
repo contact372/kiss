@@ -3,7 +3,7 @@
  * @fileOverview A multi-step flow that first fuses two images into one, 
  * then generates a video from that fused image, managing state via Firestore.
  */
-import * as admin from 'firebase-admin'; // Import the admin SDK directly
+import * as admin from 'firebase-admin';
 import { fuseFaces } from './fuse-faces'; 
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -16,7 +16,6 @@ import { FieldValue } from 'firebase-admin/firestore';
 export async function generateKissVideo(input: GenerateKissVideoInput): Promise<GenerateKissVideoOutput> {
   console.log('[MAIN_FLOW] Starting two-step video generation process...');
 
-  // The admin SDK is initialized globally, so we can get services directly.
   const db = admin.firestore();
   const storage = admin.storage();
 
@@ -43,10 +42,15 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     const file = bucket.file(fileName);
     const buffer = Buffer.from(fusionResult.fusedImageUri.split(',')[1], 'base64');
     await file.save(buffer, { metadata: { contentType: 'image/png' } });
-    await file.makePublic();
-    const imageUrl = file.publicUrl();
 
-    console.log(`[MAIN_FLOW] Fused image uploaded to Storage: ${imageUrl}`);
+    // CORRECT FIX: Instead of making the file public, generate a long-lived Signed URL.
+    // This is compatible with uniform bucket-level access.
+    const [imageUrl] = await file.getSignedUrl({
+        action: 'read',
+        expires: '03-09-2491' // A date in the distant future.
+    });
+
+    console.log(`[MAIN_FLOW] Fused image uploaded and signed URL created: ${imageUrl}`);
 
     await generationDocRef.set({
         id: generationId,
@@ -74,7 +78,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
             passthrough: JSON.stringify({ generationId: generationId }), 
             input: {
                 image: imageUrl, 
-                prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
+                prompt: 'Make the two people in the image kiss passionately. Do not add anything, no other person. The video should be cinematic, 4k, and high quality. Shot with static camera that doesnt move, only the people are moving, the camera is not shaking.',
             },
         })
     };
