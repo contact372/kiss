@@ -3,9 +3,9 @@
  * @fileOverview A multi-step flow that first fuses two images into one, 
  * then generates a video from that fused image, managing state via Firestore.
  */
+import * as admin from 'firebase-admin'; // Import the admin SDK directly
 import { fuseFaces } from './fuse-faces'; 
 import { GenerateKissVideoInput, GenerateKissVideoOutput } from './types';
-import { getFirebaseAdmin } from '@/lib/firebase/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 /**
@@ -15,7 +15,10 @@ import { FieldValue } from 'firebase-admin/firestore';
  */
 export async function generateKissVideo(input: GenerateKissVideoInput): Promise<GenerateKissVideoOutput> {
   console.log('[MAIN_FLOW] Starting two-step video generation process...');
-  const admin = getFirebaseAdmin();
+
+  // The admin SDK is initialized globally, so we can get services directly.
+  const db = admin.firestore();
+  const storage = admin.storage();
 
   // STEP 1: Fuse the two images
   console.log('[MAIN_FLOW] Step 1: Fusing faces...');
@@ -31,17 +34,17 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
   // STEP 2: Initiate video generation with Pollo AI and track via Firestore
   console.log('[MAIN_FLOW] Step 2: Animating the fused image with Pollo AI...');
   
-  const generationDocRef = admin.db.collection('videoGenerations').doc();
+  const generationDocRef = db.collection('videoGenerations').doc();
   const generationId = generationDocRef.id;
 
   try {
-    const bucket = admin.storage.bucket();
+    const bucket = storage.bucket();
     const fileName = `fused-images/${generationId}.png`;
     const file = bucket.file(fileName);
     const buffer = Buffer.from(fusionResult.fusedImageUri.split(',')[1], 'base64');
     await file.save(buffer, { metadata: { contentType: 'image/png' } });
     await file.makePublic();
-    const imageUrl = file.publicUrl(); // This is the public URL we need.
+    const imageUrl = file.publicUrl();
 
     console.log(`[MAIN_FLOW] Fused image uploaded to Storage: ${imageUrl}`);
 
@@ -50,14 +53,18 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
         userId: input.userId, 
         status: 'pending',
         createdAt: FieldValue.serverTimestamp(),
-        sourceImageUrl: imageUrl, // The public URL is correctly saved here.
+        sourceImageUrl: imageUrl,
     });
     console.log(`[MAIN_FLOW] Created tracking document in Firestore with ID: ${generationId}`);
 
-    // Step 2c: Call Pollo AI with the public image URL and webhook
+    // Call Pollo AI with the public image URL and webhook
     const url = 'https://pollo.ai/api/platform/generation/kling-ai/kling-v2-1';
-    const apiKey = process.env.POLLO_API_KEY || '<your-pollo-api-key>';
+    const apiKey = process.env.POLLO_API_KEY || '';
     const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/pollo-webhook`;
+
+    if (!apiKey) {
+        throw new Error('POLLO_API_KEY is not set in environment variables.');
+    }
 
     const options = {
         method: 'POST',
@@ -67,7 +74,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
             passthrough: JSON.stringify({ generationId: generationId }), 
             input: {
                 image: imageUrl, 
-                prompt: 'Make the two people in the image kiss passionately. Do not add anything, no other person. The video should be cinematic, 4k, and high quality. Shot with static camera that doesnt move, only the people are moving, the camera is not shaking',
+                prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
             },
         })
     };
@@ -89,7 +96,6 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
 
     console.log(`[MAIN_FLOW] Task successfully submitted to Pollo AI. External Task ID: ${externalTaskId}`);
     
-    // THE FINAL, CORRECT FIX: Return the public URL, not the base64 data URI.
     return {
       generationId: generationId,
       status: 'processing',
