@@ -247,7 +247,7 @@ function PageContent() {
                 return;
             }
             
-            startLoadingAnimation('configuring', 45000); 
+            startLoadingAnimation('configuring', 69000); 
             clearSessionState();
         
             const result = await createKissVideoAction({
