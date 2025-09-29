@@ -285,11 +285,14 @@ function PageContent() {
         return new Promise((resolve) => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            if (!ctx) return resolve(img1Src); // Fallback to the first image on error
+            const fallback = () => resolve(img2Src || img1Src);
+
+            if (!ctx) return fallback();
 
             const img1 = new window.Image();
             const img2 = new window.Image();
 
+            // This setup ensures that the Promise.all waits for the image to be fully loaded or for an error to occur.
             const loadPromise1 = new Promise(res => { img1.onload = res; img1.onerror = res; });
             const loadPromise2 = new Promise(res => { img2.onload = res; img2.onerror = res; });
 
@@ -297,16 +300,22 @@ function PageContent() {
             img2.src = img2Src;
 
             Promise.all([loadPromise1, loadPromise2]).then(() => {
-                // Set canvas to a 16:9 aspect ratio
+                // **THE FIX**: Verify that images have actually loaded by checking their width.
+                // If an image fails to load, its naturalWidth will be 0.
+                if (img1.naturalWidth === 0 || img2.naturalWidth === 0) {
+                    console.error("[CLIENT] Teaser fusion failed: One or both images could not be loaded.");
+                    return fallback();
+                }
+
                 canvas.width = 1280;
                 canvas.height = 720;
 
-                // Draw images side-by-side, scaled to fit each half of the canvas
+                // This drawing logic might stretch images, but it ensures both are visible.
                 ctx.drawImage(img1, 0, 0, 640, 720);
                 ctx.drawImage(img2, 640, 0, 640, 720);
 
                 resolve(canvas.toDataURL('image/jpeg'));
-            });
+            }).catch(fallback); // Fallback if the promise itself rejects for any reason.
         });
     };
 
@@ -316,7 +325,7 @@ function PageContent() {
             const fusedTeaserImage = await fuseImagesForTeaser(image1, image2);
             setSourceImageUrl(fusedTeaserImage);
         } else {
-            // Fallback to whichever image exists
+            // Fallback to whichever image exists if one is missing.
             setSourceImageUrl(image2 || image1);
         }
         setAppState('teaser');
