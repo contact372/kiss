@@ -7,7 +7,6 @@ import * as admin from 'firebase-admin';
 if (!admin.apps.length) {
   // Lorsqu'on est sur Google Cloud (Cloud Run), appeler initializeApp() sans argument
   // permet au SDK de découvrir automatiquement la configuration du projet depuis l'environnement.
-  // C'est la méthode recommandée et la plus propre.
   admin.initializeApp();
 }
 
@@ -24,11 +23,10 @@ export async function POST(req: NextRequest) {
     const idToken = authHeader.split('Bearer ')[1];
 
     // 2. Vérifier le token pour authentifier l'utilisateur.
-    // Cette étape va maintenant fonctionner car le SDK est correctement initialisé.
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     const uid = decodedToken.uid;
 
-    // 3. Mettre à jour le document de l'utilisateur dans Firestore.
+    // 3. Mettre à jour (ou créer) le document de l'utilisateur dans Firestore.
     const userRef = admin.firestore().collection("users").doc(uid);
     
     await admin.firestore().runTransaction(async (transaction) => {
@@ -36,10 +34,14 @@ export async function POST(req: NextRequest) {
       const currentCredits = userDoc.data()?.credits || 0;
       const newCredits = currentCredits + 100;
 
-      transaction.update(userRef, {
+      // LA CORRECTION CLÉ EST ICI :
+      // On utilise .set() avec { merge: true } au lieu de .update().
+      // Cela crée le document s'il n'existe pas, et le met à jour s'il existe.
+      // C'est ce qu'on appelle un "upsert".
+      transaction.set(userRef, {
         hasPaid: true,
         credits: newCredits,
-      });
+      }, { merge: true });
     });
 
     // 4. Renvoyer une réponse de succès.
@@ -47,10 +49,12 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('--- ERROR IN /api/grant-access ---', error);
-    // Gérer les erreurs spécifiques de Firebase Auth
-    if (error.code && error.code.startsWith('auth/')) {
+    
+    // Correction de la gestion d'erreur : on vérifie que error.code est bien une chaîne.
+    if (typeof error.code === 'string' && error.code.startsWith('auth/')) {
       return NextResponse.json({ success: false, message: `Forbidden: Invalid authentication token. (Reason: ${error.message})` }, { status: 403 });
     }
+    
     return NextResponse.json({ success: false, message: 'Internal Server Error' }, { status: 500 });
   }
 }
