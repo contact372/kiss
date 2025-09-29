@@ -1,4 +1,5 @@
-import { getFirebaseAdmin } from '@/lib/firebase/firebase-admin';
+import * as admin from 'firebase-admin';
+import '@/lib/firebase/firebase-admin'; // Ensures admin is initialized
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
@@ -6,7 +7,9 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(req: Request) {
   const headersList = headers();
-  const admin = getFirebaseAdmin();
+  
+  // The old getFirebaseAdmin is gone. We now import admin and ensure it's initialized.
+  const db = admin.firestore();
 
   const webhookId = headersList.get('x-webhook-id');
   const webhookTimestamp = headersList.get('x-webhook-timestamp');
@@ -36,7 +39,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Invalid payload: missing taskId' }, { status: 400 });
     }
 
-    const videoGenerationsRef = admin.db.collection('videoGenerations');
+    const videoGenerationsRef = db.collection('videoGenerations');
     const q = videoGenerationsRef.where('externalTaskId', '==', taskId).limit(1);
     const querySnapshot = await q.get();
 
