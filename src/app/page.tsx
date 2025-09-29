@@ -280,49 +280,9 @@ function PageContent() {
     const teaserDuration = 8000;
     startLoadingAnimation('teaser', teaserDuration);
 
-    const fuseImagesForTeaser = (img1Src: string, img2Src: string): Promise<string> => {
-        return new Promise((resolve) => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const fallback = () => resolve(img2Src || img1Src);
-
-            if (!ctx) return fallback();
-
-            const img1 = new window.Image();
-            const img2 = new window.Image();
-
-            const loadPromise1 = new Promise(res => { img1.onload = res; img1.onerror = res; });
-            const loadPromise2 = new Promise(res => { img2.onload = res; img2.onerror = res; });
-
-            img1.src = img1Src;
-            img2.src = img2Src;
-
-            Promise.all([loadPromise1, loadPromise2]).then(() => {
-                if (img1.naturalWidth === 0 || img2.naturalWidth === 0) {
-                    console.error("[CLIENT] Teaser fusion failed: One or both images could not be loaded.");
-                    return fallback();
-                }
-
-                canvas.width = 1280;
-                canvas.height = 720;
-
-                ctx.drawImage(img1, 0, 0, 640, 720);
-                ctx.drawImage(img2, 640, 0, 640, 720);
-
-                // THE FIX: Compress the JPEG to reduce the data URI size.
-                resolve(canvas.toDataURL('image/jpeg', 0.5));
-            }).catch(fallback);
-        });
-    };
-
-    const teaserTimeout = setTimeout(async () => {
+    // NO MORE IMAGE FUSION. Just wait and switch state.
+    const teaserTimeout = setTimeout(() => {
         stopLoading();
-        if (image1 && image2) {
-            const fusedTeaserImage = await fuseImagesForTeaser(image1, image2);
-            setSourceImageUrl(fusedTeaserImage);
-        } else {
-            setSourceImageUrl(image2 || image1);
-        }
         setAppState('teaser');
     }, teaserDuration);
 
@@ -409,8 +369,25 @@ function PageContent() {
       <CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Unlock your video to see the magic moment.</CardDescription></CardHeader>
       <CardContent className="p-4 pt-0">
         <div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={sourceImageUrl || 'https://placehold.co/1280x720.png'} alt="Blurred preview" width="1280" height="720" className="w-full h-full object-cover filter blur-lg scale-110"/>
+            {/* THE FIX: Use two simple img tags in a flex container. The blur is applied to the container. */}
+            <div className="absolute inset-0 flex filter blur-lg scale-110">
+                {image1 && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={image1}
+                        alt="Preview 1"
+                        className="w-1/2 h-full object-cover"
+                    />
+                )}
+                {image2 && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={image2}
+                        alt="Preview 2"
+                        className="w-1/2 h-full object-cover"
+                    />
+                )}
+            </div>
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center"><Button onClick={handleSeeVideo} size="lg" className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"><Eye className="mr-2 h-5 w-5" />See the Video</Button></div>
         </div>
       </CardContent>
