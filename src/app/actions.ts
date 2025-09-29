@@ -10,10 +10,9 @@ interface CreateKissVideoActionInput {
     image2_data_uri: string;
 }
 
-// FIX: The output property name is changed to match what the client (page.tsx) expects.
 interface CreateKissVideoActionOutput {
     generationId?: string;
-    sourceImageUrl?: string; // Changed from sourceImageDataUri
+    sourceImageUrl?: string;
     error?: string;
 }
 
@@ -30,7 +29,9 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
     try {
         // 1. Validate user and credits
         console.log(`[ACTION_LOG] Checking profile for user: ${userId}`);
-        const userRef = admin.db.doc(`users/${userId}`);
+        
+        const db = admin.firestore();
+        const userRef = db.doc(`users/${userId}`);
         const docSnap = await userRef.get();
 
         if (!docSnap.exists) {
@@ -70,7 +71,7 @@ export async function createKissVideoAction(input: CreateKissVideoActionInput): 
         console.log('[ACTION_SUCCESS] createKissVideoAction completed successfully. Task started.');
         return {
             generationId: result.generationId, 
-            sourceImageUrl: result.sourceImageUri, // FIX: The property name is now sourceImageUrl
+            sourceImageUrl: result.sourceImageUri,
         };
 
     } catch (e) {
