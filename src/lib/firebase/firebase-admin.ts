@@ -2,8 +2,8 @@
 import * as admin from 'firebase-admin';
 
 // The default bucket name for your Firebase project.
-// This is derived from your project ID: kiss-85782219182
-const FIREBASE_STORAGE_BUCKET = 'kiss-85782219182.appspot.com';
+// This is derived from your project ID: gen-lang-client-0395827708
+const FIREBASE_STORAGE_BUCKET = 'gen-lang-client-0395827708.firebasestorage.app';
 
 /**
  * This function initializes the Firebase Admin SDK if it hasn't been initialized yet.
@@ -55,4 +55,3 @@ export const decrementUserCreditsAdmin = async (uid: string, amount: number = 1)
     return { success: true, newCredits };
   });
 };
-
