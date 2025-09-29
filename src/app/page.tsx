@@ -309,7 +309,8 @@ function PageContent() {
                 ctx.drawImage(img1, 0, 0, 640, 720);
                 ctx.drawImage(img2, 640, 0, 640, 720);
 
-                resolve(canvas.toDataURL('image/jpeg'));
+                // THE FIX: Compress the JPEG to reduce the data URI size.
+                resolve(canvas.toDataURL('image/jpeg', 0.5));
             }).catch(fallback);
         });
     };
