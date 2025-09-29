@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     await admin.firestore().runTransaction(async (transaction) => {
       const userDoc = await transaction.get(userRef);
       const currentCredits = userDoc.data()?.credits || 0;
-      const newCredits = currentCredits + 100;
+      const newCredits = currentCredits + 15;
 
       // LA CORRECTION CLÉ EST ICI :
       // On utilise .set() avec { merge: true } au lieu de .update().
