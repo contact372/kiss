@@ -1,8 +1,8 @@
 
 import * as admin from 'firebase-admin';
 
-// CORRECT BUCKET NAME for the project where the app is deployed (kiss-85782219182)
-const FIREBASE_STORAGE_BUCKET = 'kiss-85782219182.appspot.com';
+// THIS IS THE CORRECT BUCKET. It belongs to the Firebase project gen-lang-client-0395827708.
+const FIREBASE_STORAGE_BUCKET = 'gen-lang-client-0395827708.firebasestorage.app';
 
 /**
  * This function initializes the Firebase Admin SDK if it hasn't been initialized yet.
@@ -11,12 +11,13 @@ const FIREBASE_STORAGE_BUCKET = 'kiss-85782219182.appspot.com';
  */
 function initializeFirebaseAdmin() {
   if (!admin.apps.length) {
-    // When deployed to Google Cloud (e.g., Cloud Run), the SDK can auto-discover the project credentials.
-    // We add the storageBucket to the config to ensure Cloud Storage works correctly.
+    // When deployed to Google Cloud (e.g., Cloud Run), the SDK can auto-discover the project credentials
+    // of the project it is running in. We explicitly tell it which bucket to use, even if it's
+    // in a different project.
     admin.initializeApp({
       storageBucket: FIREBASE_STORAGE_BUCKET,
     });
-    console.log(`Firebase Admin SDK Initialized with Storage Bucket: ${FIREBASE_STORAGE_BUCKET}`);
+    console.log(`Firebase Admin SDK Initialized. Using Storage Bucket: ${FIREBASE_STORAGE_BUCKET}`);
   } else {
     // If already initialized, just return the default app instance.
     return admin.app();
