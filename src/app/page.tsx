@@ -281,13 +281,47 @@ function PageContent() {
     const teaserDuration = 8000;
     startLoadingAnimation('teaser', teaserDuration);
 
-    const teaserTimeout = setTimeout(() => {
+    const fuseImagesForTeaser = (img1Src: string, img2Src: string): Promise<string> => {
+        return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(img1Src); // Fallback to the first image on error
+
+            const img1 = new window.Image();
+            const img2 = new window.Image();
+
+            const loadPromise1 = new Promise(res => { img1.onload = res; img1.onerror = res; });
+            const loadPromise2 = new Promise(res => { img2.onload = res; img2.onerror = res; });
+
+            img1.src = img1Src;
+            img2.src = img2Src;
+
+            Promise.all([loadPromise1, loadPromise2]).then(() => {
+                // Set canvas to a 16:9 aspect ratio
+                canvas.width = 1280;
+                canvas.height = 720;
+
+                // Draw images side-by-side, scaled to fit each half of the canvas
+                ctx.drawImage(img1, 0, 0, 640, 720);
+                ctx.drawImage(img2, 640, 0, 640, 720);
+
+                resolve(canvas.toDataURL('image/jpeg'));
+            });
+        });
+    };
+
+    const teaserTimeout = setTimeout(async () => {
         stopLoading();
-        const teaserSourceImage = image2 || image1;
-        setSourceImageUrl(teaserSourceImage);
+        if (image1 && image2) {
+            const fusedTeaserImage = await fuseImagesForTeaser(image1, image2);
+            setSourceImageUrl(fusedTeaserImage);
+        } else {
+            // Fallback to whichever image exists
+            setSourceImageUrl(image2 || image1);
+        }
         setAppState('teaser');
     }, teaserDuration);
-    
+
     return () => clearTimeout(teaserTimeout);
   };
 
