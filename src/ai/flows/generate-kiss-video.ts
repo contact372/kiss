@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A multi-step flow that first fuses two images into one, 
@@ -69,6 +70,9 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     const apiKey = process.env.POLLO_API_KEY || '';
     const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/pollo-webhook`;
 
+    // DIAGNOSTIC LOG
+    console.log(`[DIAGNOSTIC] Using API Key starting with: ${apiKey.substring(0, 10)} and ending with: ${apiKey.substring(apiKey.length - 4)}`);
+
     if (!apiKey) {
         throw new Error('POLLO_API_KEY is not set in environment variables.');
     }
@@ -81,7 +85,7 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
             passthrough: JSON.stringify({ generationId: generationId }), 
             input: {
                 image: imageUrl, 
-                prompt: 'Make the two people in the image kiss passionately. Do not add anything, no other person. The video should be cinematic, 4k, and high quality. Shot with static camera that doesnt move, only the people are moving, the camera is not shaking.',
+                prompt: 'Make the two people in the image kiss passionately. Do not add anything, no other person. The video should be cinematic, 4k, and high quality. Shot with static camera that doesnt move, only the people are moving, the camera is not shaking',
             },
         })
     };
