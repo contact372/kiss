@@ -1,83 +1,61 @@
-'use server';
 
-import { decrementUserCreditsAdmin } from '@/lib/firebase/firebase-admin';
-import * as admin from 'firebase-admin'; // Import the admin SDK directly
-import type { UserProfile } from '@/lib/firebase/types';
-import { generateKissVideo } from '@/ai/flows/generate-kiss-video'; 
+"use server";
 
-interface CreateKissVideoActionInput {
-    userId: string;
-    image1DataUri: string;
-    image2_data_uri: string;
+import { revalidatePath } from "next/cache";
+import { db } from "@/lib/firebase/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
+import { pubSubClient } from "@/lib/pubsub"; // Import du client Pub/Sub
+import { v4 as uuidv4 } from "uuid";
+import { CreateKissVideo } from "@/types/creation";
+
+const TOPIC_NAME = process.env.PUB_SUB_TOPIC_NAME || 'video-generation-requests';
+
+export async function createKissVideoAction(createKissVideo: CreateKissVideo) {
+  const { userId, image1DataUri, image2_data_uri } = createKissVideo;
+  console.log(`[${userId}] Initiating video generation.`);
+
+  // 1. Créer un ID de génération unique
+  const generationId = uuidv4();
+
+  try {
+    // 2. Créer immédiatement le document dans Firestore pour le suivi côté client
+    await db.collection('videoGenerations').doc(generationId).set({
+      userId: userId,
+      status: 'pending', // Le statut initial est "en attente"
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[${generationId}] Firestore document created with status: pending.`);
+
+    // 3. Préparer le message à envoyer à notre worker
+    const message = {
+      generationId,
+      userId,
+      image1DataUri,
+      image2_data_uri,
+    };
+
+    // 4. Publier le message dans le topic Pub/Sub
+    const dataBuffer = Buffer.from(JSON.stringify(message));
+    await pubSubClient.topic(TOPIC_NAME).publishMessage({ data: dataBuffer });
+
+    console.log(`[${generationId}] Message published to topic: ${TOPIC_NAME}.`);
+
+    revalidatePath("/");
+
+    // 5. Renvoyer l'ID au client, qui va commencer à écouter le document Firestore.
+    return {
+      generationId: generationId,
+    };
+
+  } catch (error) {
+    console.error(`[${generationId}] Failed to initiate video generation:`, error);
+    // En cas d'erreur, on essaie de nettoyer le document Firestore créé
+    await db.collection('videoGenerations').doc(generationId).delete().catch(() => {});
+    return {
+      error: "Failed to start the generation process. Please try again.",
+    };
+  }
 }
 
-interface CreateKissVideoActionOutput {
-    generationId?: string;
-    sourceImageUrl?: string;
-    error?: string;
-}
-
-export async function createKissVideoAction(input: CreateKissVideoActionInput): Promise<CreateKissVideoActionOutput> {
-    console.log('[ACTION_START] createKissVideoAction invoked.');
-    const { userId, image1DataUri, image2_data_uri } = input;
-
-    if (!userId || !image1DataUri || !image2_data_uri) {
-        console.error('[ACTION_FATAL] Missing one or more required inputs.');
-        return { error: "Internal server error: Missing required data." };
-    }
-
-    try {
-        // 1. Validate user and credits
-        console.log(`[ACTION_LOG] Checking profile for user: ${userId}`);
-        
-        // The admin SDK is now initialized globally, so we can use it directly.
-        const db = admin.firestore();
-        const userRef = db.doc(`users/${userId}`);
-        const docSnap = await userRef.get();
-
-        if (!docSnap.exists) {
-            console.error(`[ACTION_ERROR] User profile not found for UID: ${userId}`);
-            return { error: "User profile not found." };
-        }
-        
-        const userProfile = docSnap.data() as UserProfile;
-        console.log(`[ACTION_LOG] User profile found. Subscribed: ${userProfile.isSubscribed}, Credits: ${userProfile.credits}`);
-        
-        if (!userProfile.isSubscribed && (userProfile.credits || 0) <= 0) {
-            console.warn(`[ACTION_WARN] User ${userId} has insufficient credits.`);
-            return { error: "You do not have enough credits to generate a video." };
-        }
-
-        // 2. Call the AI flow
-        console.log('[ACTION_LOG] Starting main video generation flow...');
-        const result = await generateKissVideo({
-            userId: userId, 
-            image1Uri: image1DataUri,
-            image2Uri: image2_data_uri,
-        });
-        
-        if (result.error || !result.generationId) {
-            console.error('[ACTION_ERROR] Main flow failed:', result.error);
-            return { error: result.error || "Failed to get a generation ID from the main flow." };
-        }
-        
-        // 3. Decrement credits (if applicable)
-        console.log('[ACTION_LOG] Main flow task started successfully. Decrementing credits if applicable...');
-        if (!userProfile.isSubscribed) {
-            await decrementUserCreditsAdmin(userId);
-            console.log(`[ACTION_LOG] Credits decremented for user ${userId}.`);
-        }
-
-        // 4. Return the result to the client
-        console.log('[ACTION_SUCCESS] createKissVideoAction completed successfully. Task started.');
-        return {
-            generationId: result.generationId, 
-            sourceImageUrl: result.sourceImageUri,
-        };
-
-    } catch (e) {
-        const message = e instanceof Error ? e.message : 'An unknown error occurred during video creation.';
-        console.error('[ACTION_FATAL] Unhandled exception in createKissVideoAction:', message, e);
-        return { error: message };
-    }
-}
