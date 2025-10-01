@@ -68,7 +68,15 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
     const options = {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl, passthrough: JSON.stringify({ generationId }), input: { image: imageUrl, prompt: '...' } })
+        body: JSON.stringify({
+            webhookUrl: webhookUrl,
+            passthrough: JSON.stringify({ generationId: generationId }), 
+            input: {
+                image: imageUrl, 
+                prompt: 'Make the two people in the image kiss passionately. The video should be cinematic, 4k, and high quality.',
+                // Vous pouvez ajouter d'autres paramètres ici si nécessaire, comme la durée
+            },
+        })
     };
 
     const response = await fetch(url, options);
@@ -90,7 +98,6 @@ export async function generateKissVideo(input: GenerateKissVideoInput): Promise<
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
     console.error(`[FATAL_CRASH] A critical error occurred: ${errorMessage}`, err);
-    // Try to update Firestore one last time, but this might fail too.
     try {
       const db = admin.firestore();
       const generationDocRef = db.collection('videoGenerations').doc();
