@@ -2,19 +2,24 @@
 
 import React, { createContext, useContext, useEffect, useState, type ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from '@/lib/firebase/firebase'; // Correctly import the auth instance
+import { auth } from '@/lib/firebase/firebase'; 
 import { Loader2 } from 'lucide-react';
-import { getUserProfile } from '@/lib/firebase/db'; // Use the new function
+import { ensureUserProfile } from '@/lib/firebase/db';
 import type { UserProfile } from '@/lib/firebase/types';
 
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  refreshUserProfile: () => Promise<UserProfile | null>;
+  refreshUserProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, userProfile: null, loading: true, refreshUserProfile: async () => null });
+const AuthContext = createContext<AuthContextType>({ 
+  user: null, 
+  userProfile: null, 
+  loading: true, 
+  refreshUserProfile: async () => {} 
+});
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -23,22 +28,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshUserProfile = useCallback(async () => {
     if (user) {
-        console.log('[AUTH_CONTEXT] Refreshing user profile for UID:', user.uid);
-        const profile = await getUserProfile(user.uid); // Use the new function
-        setUserProfile(profile);
-        return profile;
+      const profile = await ensureUserProfile(user.uid, user.email);
+      setUserProfile(profile);
     }
-    return null;
   }, [user]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => { // Use the imported auth instance directly
-      setLoading(true);
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const profile = await getUserProfile(user.uid); // Use the new function
+        const profile = await ensureUserProfile(user.uid, user.email);
+        setUser(user);
         setUserProfile(profile);
       } else {
+        setUser(null);
         setUserProfile(null);
       }
       setLoading(false);
@@ -52,7 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         <div className="flex items-center justify-center h-screen w-full">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
-    )
+    );
   }
 
   return <AuthContext.Provider value={{ user, userProfile, loading, refreshUserProfile }}>{children}</AuthContext.Provider>;
