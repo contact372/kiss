@@ -349,7 +349,7 @@ function PageContent() {
             {/* Colonne Gauche: Titre et Vidéo */}
             <div className="flex flex-col items-center text-center md:items-start md:text-left">
                 <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
-                    Kiss your crush with ai
+                    Kiss Your Crush With AI
                 </h1>
                 <div className="mt-6 w-full max-w-md aspect-[9/16] md:aspect-video rounded-2xl overflow-hidden shadow-xl">
                     <video 
