@@ -38,7 +38,7 @@ function PageContent() {
   const searchParams = useSearchParams();
   const [appState, setAppState] = useState<AppState>('form');
   const [loadingReason, setLoadingReason] = useState<LoadingReason>('generating');
-  const [isDownloading, setIsDownloading] = useState(false); // <-- NOUVEAU : pour l'indicateur de chargement
+  const [isDownloading, setIsDownloading] = useState(false);
   const [image1, setImage1] = useState<string | null>(null);
   const [image2, setImage2] = useState<string | null>(null);
   const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
@@ -189,7 +189,7 @@ function PageContent() {
     if (!restoredImage1 || !restoredImage2) return;
 
     setTimeout(() => {
-        if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) { // Corrected from isSubscribed
+        if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) {
             startRealGeneration(restoredImage1, restoredImage2);
         } else {
             handleTeaserFlow();
@@ -213,17 +213,15 @@ function PageContent() {
         try {
             const { restoredImage1, restoredImage2 } = restoreStateFromSession();
 
-            // Get the user's ID token
             const idToken = await user.getIdToken();
 
-            // Call the grantPaidAccess function using fetch
             const response = await fetch('/api/grant-access', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${idToken}`,
                 },
-                body: JSON.stringify({}), // Body can be empty as UID is from token
+                body: JSON.stringify({}),
             });
 
             if (!response.ok) {
@@ -281,7 +279,6 @@ function PageContent() {
     const teaserDuration = 8000;
     startLoadingAnimation('teaser', teaserDuration);
 
-    // NO MORE IMAGE FUSION. Just wait and switch state.
     const teaserTimeout = setTimeout(() => {
         stopLoading();
         setAppState('teaser');
@@ -299,7 +296,7 @@ function PageContent() {
         return;
     }
 
-    if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) { // Corrected from isSubscribed
+    if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) {
         startRealGeneration();
     } else {
         toast({
@@ -323,21 +320,38 @@ function PageContent() {
     if (!videoUrl) return;
     setIsDownloading(true);
     try {
-      const response = await fetch(videoUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'eternal-kiss.mp4';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url); // Libère la mémoire
-    } catch (error) {
-      console.error("Download failed:", error);
-      toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not download the video.' });
+        const response = await fetch(videoUrl);
+        if (!response.ok) throw new Error('Network response was not ok.');
+        const blob = await response.blob();
+        const file = new File([blob], "eternal-kiss.mp4", { type: "video/mp4" });
+
+        // Utilise l'API Web Share si elle est disponible (mobile)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: 'Your Eternal Kiss',
+                text: 'Check out this video I created!',
+            });
+        } else {
+            // Fallback pour le bureau et les navigateurs non compatibles
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'eternal-kiss.mp4';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        }
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            console.log('Share action was cancelled.');
+        } else {
+            console.error("Download or share failed:", error);
+            toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not download or share the video.' });
+        }
     } finally {
-      setIsDownloading(false);
+        setIsDownloading(false);
     }
   };
 
@@ -378,8 +392,8 @@ function PageContent() {
   const renderResultState = () => (
      <Card className="w-full overflow-hidden shadow-2xl bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
         <CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Here is your moment of magic.</CardDescription></CardHeader>
-        <CardContent className="p-4 pt-0"><div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">{videoUrl && <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />}</div></flickity-component-1690465228514>
-        <CardFooter className="p-4 pt-0 flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Create Another</Button>{videoUrl && <Button onClick={handleDownload} disabled={isDownloading} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"><Download className="mr-2 h-4 w-4" />{isDownloading ? 'Downloading...' : 'Download Video'}</Button>}</CardFooter>
+        <CardContent className="p-4 pt-0"><div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">{videoUrl && <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />}</div></CardContent>
+        <CardFooter className="p-4 pt-0 flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Create Another</Button>{videoUrl && <Button onClick={handleDownload} disabled={isDownloading} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"><Download className="mr-2 h-4 w-4" />{isDownloading ? 'Saving...' : 'Save or Share Video'}</Button>}</CardFooter>
     </Card>
   );
 
@@ -388,7 +402,6 @@ function PageContent() {
       <CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Unlock your video to see the magic moment.</CardDescription></CardHeader>
       <CardContent className="p-4 pt-0">
         <div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">
-            {/* THE FIX: Use two simple img tags in a flex container. The blur is applied to the container. */}
             <div className="absolute inset-0 flex filter blur-lg scale-110">
                 {image1 && (
                     // eslint-disable-next-line @next/next/no-img-element
