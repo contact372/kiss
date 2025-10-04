@@ -319,13 +319,19 @@ function PageContent() {
   const handleDownload = async () => {
     if (!videoUrl) return;
     setIsDownloading(true);
+
     try {
-        const response = await fetch(videoUrl);
-        if (!response.ok) throw new Error('Network response was not ok.');
+        // On passe maintenant par notre propre API pour éviter les problèmes de CORS
+        const proxyUrl = `/api/download-video?url=${encodeURIComponent(videoUrl)}`;
+        const response = await fetch(proxyUrl);
+
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
+
         const blob = await response.blob();
         const file = new File([blob], "eternal-kiss.mp4", { type: "video/mp4" });
 
-        // Utilise l'API Web Share si elle est disponible (mobile)
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
@@ -333,7 +339,6 @@ function PageContent() {
                 text: 'Check out this video I created!',
             });
         } else {
-            // Fallback pour le bureau et les navigateurs non compatibles
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
