@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Wand2, ArrowLeft, Eye, Download } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import SubscriptionDialog from '@/components/app/subscription-dialog';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase/firebase';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
@@ -45,7 +44,6 @@ function PageContent() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [canGenerate, setCanGenerate] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [isSubDialogOpen, setIsSubDialogOpen] = useState(false);
   const { toast } = useToast();
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
@@ -299,28 +297,19 @@ function PageContent() {
     if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) {
         startRealGeneration();
     } else {
-        toast({
-            variant: 'destructive',
-            title: 'Not Enough Credits',
-            description: 'Please purchase more to generate a new video.',
-        });
+        handleTeaserFlow();
     }
   };
 
   const handleSeeVideo = () => {
      saveStateToSession();
-     if (!user) {
-        router.push('/login?tab=signup&start_teaser=true');
-        return;
-     }
-     setIsSubDialogOpen(true);
+     router.push('/pricing');
   };
 
   const handleDownload = async () => {
     if (!videoUrl) return;
     setIsDownloading(true);
 
-    // Détecte si l'appareil est un mobile. C'est plus fiable que de juste tester navigator.share.
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     try {
@@ -334,14 +323,12 @@ function PageContent() {
         const blob = await response.blob();
         const file = new File([blob], "eternal-kiss.mp4", { type: "video/mp4" });
 
-        // Si c'est un mobile ET que le partage est possible, on utilise le partage natif.
         if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
                 title: 'Your Eternal Kiss',
             });
         } else {
-            // Sinon (sur PC ou comme fallback), on force le téléchargement direct.
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -437,7 +424,6 @@ function PageContent() {
 
   return (
     <>
-      <SubscriptionDialog open={isSubDialogOpen} onOpenChange={setIsSubDialogOpen} />
       <main className="flex-grow flex items-center justify-center p-4"><div className="w-full max-w-xl mx-auto">{appState === 'form' && (<div className="space-y-6"><div className="text-center"><h2 className="text-5xl font-extrabold tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Kiss Your Crush with AI</h2></div><ImageUploader image1={image1} setImage1={setImage1} image2={image2} setImage2={setImage2} /><div className="space-y-3"><Button onClick={handleGenerate} disabled={!canGenerate || appState === 'loading'} size="lg" className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white disabled:opacity-75">{appState === 'loading' ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}{getButtonText()}</Button></div></div>)}{appState === 'loading' && renderLoadingState()}{appState === 'result' && renderResultState()}{appState === 'teaser' && renderTeaserState()}</div></main>
     </>
   );
