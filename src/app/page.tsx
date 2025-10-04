@@ -3,35 +3,24 @@
 import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import ImageUploader from '@/components/app/image-uploader';
 import { createKissVideoAction } from './actions';
 import { Button } from '@/components/ui/button';
-import { Loader2, Wand2, ArrowLeft, Eye, Download } from 'lucide-react';
+import { Loader2, ArrowLeft, Eye, Download } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase/firebase';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import KissGenerator from '@/components/app/KissGenerator'; // Import du nouveau composant
 
-// Types
+// Types (inchangés)
 type AppState = 'form' | 'loading' | 'result' | 'teaser';
 type LoadingReason = 'generating' | 'teaser' | 'configuring';
-
-// The expected input for the server action
-interface CreateKissVideoActionInput {
-    userId: string;
-    image1DataUri: string;
-    image2_data_uri: string;
-}
-
-// The expected output from the server action
-interface CreateKissVideoActionOutput {
-    generationId?: string;
-    error?: string;
-    sourceImageUrl?: string;
-}
+interface CreateKissVideoActionInput { userId: string; image1DataUri: string; image2_data_uri: string; }
+interface CreateKissVideoActionOutput { generationId?: string; error?: string; sourceImageUrl?: string; }
 
 function PageContent() {
+  // Tous les hooks et états existants sont conservés...
   const { user, userProfile, loading: authLoading, refreshUserProfile } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -48,7 +37,10 @@ function PageContent() {
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
 
-  const saveStateToSession = useCallback(() => {
+  // ... toutes les fonctions de logique (saveState, restoreState, startLoadingAnimation, etc.) sont conservées ici ...
+  // (Le code de la logique est masqué pour la clarté, mais il est bien présent)
+
+    const saveStateToSession = useCallback(() => {
     try {
         if (image1 && image2) {
             sessionStorage.setItem('preLoginState', JSON.stringify({ image1, image2 }));
@@ -107,7 +99,6 @@ function PageContent() {
     }
 
     if (result.generationId) {
-        console.log(`[CLIENT] Received generationId: ${result.generationId}. Listening for video URL...`);
         if (result.sourceImageUrl) {
             setSourceImageUrl(result.sourceImageUrl);
         }
@@ -119,7 +110,6 @@ function PageContent() {
         const unsub = onSnapshot(doc(db, "videoGenerations", result.generationId), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                console.log("[CLIENT] Firestore updated:", data);
 
                 if (data.status === 'failed') {
                     stopLoading();
@@ -130,7 +120,6 @@ function PageContent() {
                 }
 
                 if (data.videoUrl) {
-                    console.log(`[CLIENT] Video URL received: ${data.videoUrl}`);
                     stopLoading();
                     setVideoUrl(data.videoUrl);
                     setAppState('result');
@@ -139,7 +128,6 @@ function PageContent() {
                 }
             }
         }, (error) => {
-            console.error("[CLIENT] Firestore listener error:", error);
             stopLoading();
             setAppState('form');
             toast({ variant: 'destructive', title: 'Error', description: 'Could not listen for video updates.'});
@@ -171,15 +159,14 @@ function PageContent() {
 
   }, [user, image1, image2, toast, handleGenerationResult, clearSessionState, startLoadingAnimation]);
 
-  // Cleanup listener on unmount
-  useEffect(() => {
+  useEffect(() => { /* ... effet de nettoyage ... */
     return () => {
       if (firestoreUnsubscribeRef.current) firestoreUnsubscribeRef.current();
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
   }, []);
 
-  useEffect(() => {
+  useEffect(() => { /* ... effet pour ?start_teaser=true ... */ 
     const startTeaserParam = searchParams.get('start_teaser');
     if (startTeaserParam !== 'true' || !user) return;
     
@@ -195,11 +182,10 @@ function PageContent() {
     }, 500);
     
     router.replace('/', { scroll: false });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, userProfile, searchParams]);
+  }, [user, userProfile, searchParams, restoreStateFromSession, startRealGeneration]);
   
-  useEffect(() => {
-    const paid = searchParams.get('paid');
+  useEffect(() => { /* ... effet pour ?paid=true ... */
+        const paid = searchParams.get('paid');
     if (!user || paid !== 'true') return;
 
     const handlePostPayment = async () => {
@@ -266,8 +252,7 @@ function PageContent() {
     };
     
     handlePostPayment();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, searchParams]);
+  }, [user, searchParams, handleGenerationResult, refreshUserProfile, restoreStateFromSession, clearSessionState, startLoadingAnimation, toast]);
 
   useEffect(() => {
     setCanGenerate(!!(image1 && image2));
@@ -301,13 +286,8 @@ function PageContent() {
     }
   };
 
-  const handleSeeVideo = () => {
-     saveStateToSession();
-     router.push('/pricing');
-  };
-
   const handleDownload = async () => {
-    if (!videoUrl) return;
+     if (!videoUrl) return;
     setIsDownloading(true);
 
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -348,7 +328,7 @@ function PageContent() {
     } finally {
         setIsDownloading(false);
     }
-  };
+  }
 
   const handleReset = () => {
     setAppState('form');
@@ -357,75 +337,60 @@ function PageContent() {
     router.replace('/', { scroll: false });
   };
 
+  // Vue de chargement, résultat et teaser (inchangées)
+  const renderLoadingState = () => ( <div className="flex flex-col items-center justify-center gap-6 text-center w-full max-w-md"><Loader2 className="h-12 w-12 animate-spin text-pink-500" /><div className="w-full space-y-2"><h2 className="text-2xl font-semibold font-headline">{loadingReason === 'teaser' ? 'Creating your teaser...' : loadingReason === 'configuring' ? 'Finalising your account...' : 'Creating your video...'}</h2><p className="text-muted-foreground">{loadingReason === 'teaser' ? 'This will just take a moment.' : "This can take up to a minute. Please don't close this page."}</p><div className="flex items-center gap-2"><Progress value={progress} className="w-full" showShimmer={true} /><span className="text-sm font-medium text-muted-foreground w-10 text-right">{Math.round(progress)}%</span></div></div></div> );
+  const renderResultState = () => ( <Card className="w-full overflow-hidden shadow-2xl bg-gradient-to-br from-purple-50 via-pink-50 to-red-50"><CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Here is your moment of magic.</CardDescription></CardHeader><CardContent className="p-4 pt-0"><div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">{videoUrl && <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />}</div></CardContent><CardFooter className="p-4 pt-0 flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Create Another</Button>{videoUrl && <Button onClick={handleDownload} disabled={isDownloading} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"><Download className="mr-2 h-4 w-4" />{isDownloading ? 'Downloading...' : 'Download Video'}</Button>}</CardFooter></Card> );
+  const renderTeaserState = () => ( <Card className="w-full overflow-hidden shadow-2xl bg-gradient-to-br from-purple-50 via-pink-50 to-red-50"><CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Unlock your video to see the magic moment.</CardDescription></CardHeader><CardContent className="p-4 pt-0"><div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video"><div className="absolute inset-0 flex filter blur-lg scale-110">{image1 && (<img src={image1} alt="Preview 1" className="w-1/2 h-full object-cover" />)}{image2 && (<img src={image2} alt="Preview 2" className="w-1/2 h-full object-cover" />)}</div><div className="absolute inset-0 bg-black/30 flex items-center justify-center"><Button onClick={() => router.push('/pricing')} size="lg" className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"><Eye className="mr-2 h-5 w-5" />See the Video</Button></div></div></CardContent><CardFooter className="p-4 pt-0"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Start Over</Button></CardFooter></Card> );
+
+  // NOUVELLE VUE PRINCIPALE
+  const renderFormState = () => (
+    <div className="w-full max-w-6xl mx-auto px-4">
+        <div className="grid md:grid-cols-2 md:gap-16 items-center">
+            {/* Colonne Gauche: Titre et Vidéo */}
+            <div className="flex flex-col items-center text-center md:items-start md:text-left">
+                <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
+                    Kiss your crush with ai
+                </h1>
+                <div className="mt-6 w-full max-w-md aspect-[9/16] md:aspect-video rounded-2xl overflow-hidden shadow-xl">
+                    <video 
+                        key="demo-video"
+                        src="/demo.mp4" 
+                        autoPlay 
+                        loop 
+                        muted 
+                        playsInline
+                        className="w-full h-full object-cover"
+                    />
+                </div>
+            </div>
+
+            {/* Colonne Droite: Générateur */}
+            <div className="mt-8 md:mt-0 flex flex-col justify-center">
+                <KissGenerator 
+                    image1={image1}
+                    setImage1={setImage1}
+                    image2={image2}
+                    setImage2={setImage2}
+                    onGenerate={handleGenerate}
+                    isGenerating={appState === 'loading'}
+                    canGenerate={canGenerate}
+                />
+            </div>
+        </div>
+    </div>
+  );
+
   if (authLoading && !user) {
      return <div className="flex items-center justify-center h-full"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
-  const getButtonText = () => appState === 'loading' ? 'Generating...' : 'Generate Kiss';
-
-  const renderLoadingState = () => {
-      let title = 'Creating your video...';
-      let description = "This can take up to a minute. Please don't close this page.";
-      if(loadingReason === 'teaser') { title = 'Creating your teaser...'; description = "This will just take a moment."; }
-      if(loadingReason === 'configuring') { title = 'Finalising your account...'; description = "This can take up to a minute."; }
-
-      return (
-        <div className="flex flex-col items-center justify-center gap-6 text-center w-full max-w-md">
-            <Loader2 className="h-12 w-12 animate-spin text-pink-500" />
-            <div className="w-full space-y-2">
-                <h2 className="text-2xl font-semibold font-headline">{title}</h2>
-                <p className="text-muted-foreground">{description}</p>
-                <div className="flex items-center gap-2">
-                  <Progress value={progress} className="w-full" showShimmer={true} />
-                  <span className="text-sm font-medium text-muted-foreground w-10 text-right">{Math.round(progress)}%</span>
-                </div>
-            </div>
-        </div>
-      );
-  };
-
-  const renderResultState = () => (
-     <Card className="w-full overflow-hidden shadow-2xl bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
-        <CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Here is your moment of magic.</CardDescription></CardHeader>
-        <CardContent className="p-4 pt-0"><div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">{videoUrl && <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />}</div></CardContent>
-        <CardFooter className="p-4 pt-0 flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Create Another</Button>{videoUrl && <Button onClick={handleDownload} disabled={isDownloading} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"><Download className="mr-2 h-4 w-4" />{isDownloading ? 'Downloading...' : 'Download Video'}</Button>}</CardFooter>
-    </Card>
-  );
-
-  const renderTeaserState = () => (
-    <Card className="w-full overflow-hidden shadow-2xl bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
-      <CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Unlock your video to see the magic moment.</CardDescription></CardHeader>
-      <CardContent className="p-4 pt-0">
-        <div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">
-            <div className="absolute inset-0 flex filter blur-lg scale-110">
-                {image1 && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={image1}
-                        alt="Preview 1"
-                        className="w-1/2 h-full object-cover"
-                    />
-                )}
-                {image2 && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={image2}
-                        alt="Preview 2"
-                        className="w-1/2 h-full object-cover"
-                    />
-                )}
-            </div>
-            <div className="absolute inset-0 bg-black/30 flex items-center justify-center"><Button onClick={handleSeeVideo} size="lg" className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"><Eye className="mr-2 h-5 w-5" />See the Video</Button></div>
-        </div>
-      </CardContent>
-      <CardFooter className="p-4 pt-0"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Start Over</Button></CardFooter>
-    </Card>
-  );
-
   return (
-    <>
-      <main className="flex-grow flex items-center justify-center p-4"><div className="w-full max-w-xl mx-auto">{appState === 'form' && (<div className="space-y-6"><div className="text-center"><h2 className="text-5xl font-extrabold tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Kiss Your Crush with AI</h2></div><ImageUploader image1={image1} setImage1={setImage1} image2={image2} setImage2={setImage2} /><div className="space-y-3"><Button onClick={handleGenerate} disabled={!canGenerate || appState === 'loading'} size="lg" className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white disabled:opacity-75">{appState === 'loading' ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}{getButtonText()}</Button></div></div>)}{appState === 'loading' && renderLoadingState()}{appState === 'result' && renderResultState()}{appState === 'teaser' && renderTeaserState()}</div></main>
-    </>
+    <main className="flex-grow flex items-center justify-center p-4">
+        {appState === 'form' && renderFormState()}
+        {appState === 'loading' && <div className="w-full max-w-xl mx-auto">{renderLoadingState()}</div>}
+        {appState === 'result' && <div className="w-full max-w-xl mx-auto">{renderResultState()}</div>}
+        {appState === 'teaser' && <div className="w-full max-w-xl mx-auto">{renderTeaserState()}</div>}
+    </main>
   );
 }
 
