@@ -327,10 +327,10 @@ function PageContent() {
 
   const renderFormState = () => (
     <div className="w-full max-w-6xl mx-auto px-4">
-        <div className="grid md:grid-cols-2 md:gap-16 items-start md:items-stretch">
+        <div className="grid md:grid-cols-2 md:gap-16 items-stretch">
             {/* Colonne Gauche: Titre et Vidéo */}
             <div className="flex flex-col items-center text-center md:items-start md:text-left py-4">
-                <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold leading-tight tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold leading-snug sm:leading-tight tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
                     Kiss Your Crush With AI
                 </h1>
                 <div className="mt-6 w-full max-w-md aspect-video rounded-2xl overflow-hidden shadow-xl">
@@ -356,7 +356,6 @@ function PageContent() {
                     onGenerate={handleGenerate}
                     isGenerating={appState === 'loading'}
                     canGenerate={canGenerate}
-                    className="h-full"
                 />
             </div>
         </div>
