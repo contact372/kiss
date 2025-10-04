@@ -327,7 +327,7 @@ function PageContent() {
 
   const renderFormState = () => (
     <div className="w-full max-w-6xl mx-auto px-4">
-        <div className="grid md:grid-cols-2 md:gap-16 items-center md:items-stretch">
+        <div className="grid md:grid-cols-2 md:gap-16 items-start md:items-stretch">
             {/* Colonne Gauche: Titre et Vidéo */}
             <div className="flex flex-col items-center text-center md:items-start md:text-left py-4">
                 <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold leading-tight tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
@@ -335,8 +335,8 @@ function PageContent() {
                 </h1>
                 <div className="mt-6 w-full max-w-md aspect-video rounded-2xl overflow-hidden shadow-xl">
                     <video 
-                        key={'demo-video-' + new Date().getTime()}
-                        src={'/demo.mp4?t=' + new Date().getTime()}
+                        key={Date.now()} // Force re-render
+                        src={`/demo.mp4?t=${Date.now()}`} // Cache-busting
                         autoPlay 
                         loop 
                         muted 
@@ -347,7 +347,7 @@ function PageContent() {
             </div>
 
             {/* Colonne Droite: Générateur */}
-            <div className="mt-8 md:mt-0 flex flex-col items-center justify-center">
+            <div className="mt-8 md:mt-0">
                 <KissGenerator 
                     image1={image1}
                     setImage1={setImage1}
@@ -356,6 +356,7 @@ function PageContent() {
                     onGenerate={handleGenerate}
                     isGenerating={appState === 'loading'}
                     canGenerate={canGenerate}
+                    className="h-full"
                 />
             </div>
         </div>
