@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Star } from "lucide-react";
+import { Star } from "lucide-react";
 
 export default function PricingPage() {
   const { user } = useAuth();
@@ -27,49 +27,49 @@ export default function PricingPage() {
   };
 
   return (
-    <main className="flex flex-col items-center justify-start md:justify-center min-h-screen bg-white p-4 py-12 sm:p-6">
+    // justify-start sur mobile pour remonter le contenu, py-12 pour un peu de marge verticale
+    <main className="flex flex-col items-center justify-start md:justify-center min-h-screen bg-white p-6 py-12">
       
-      <Button variant="ghost" onClick={() => router.back()} className="absolute top-4 left-4 text-slate-600 hover:bg-slate-100 z-10">
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Back
-      </Button>
+      {/* Le bouton Back a été supprimé */}
 
       <div className="w-full max-w-4xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-y-8 md:gap-x-16 items-center">
+        <div className="grid md:grid-cols-2 gap-y-10 md:gap-x-16 items-center">
           
-          <div className="text-left">
-            {/* Changement: font-extrabold remplacé par font-bold pour une meilleure consistance */}
-            <h1 className="text-4xl leading-tight sm:text-5xl md:text-6xl font-bold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
+          {/* Titre : centré sur mobile, aligné à gauche sur PC. Graisse forcée à extrabold. */}
+          <div className="text-center md:text-left">
+            <h1 className="text-4xl leading-tight sm:text-5xl md:text-6xl font-extrabold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
               You're one step away from kissing your crush
             </h1>
           </div>
 
+          {/* Offre : tout est centré, ce qui assure l'alignement vertical sur mobile */}
           <div className="w-full flex flex-col items-center">
             <div className="border rounded-2xl p-6 w-full max-w-xs mx-auto flex flex-col items-center text-center shadow-lg bg-slate-50">
-              {/* Le font-bold est déjà ici, on s'assure qu'il est bien appliqué */}
               <p className="text-5xl sm:text-6xl font-bold text-slate-800">0,6$<span className="text-xl sm:text-2xl font-medium text-slate-500">/credit</span></p>
             </div>
 
-            <ul className="space-y-2 my-6 text-slate-600 w-full max-w-xs mx-auto">
+            {/* Avantages : Étoiles en rose pour la cohérence */}
+            <ul className="space-y-3 my-8 text-slate-600 w-full max-w-xs mx-auto">
               <li className="flex items-center gap-3">
-                  <Star className="h-5 w-5 text-purple-400 shrink-0" fill="currentColor" />
+                  <Star className="h-5 w-5 text-pink-500 shrink-0" fill="currentColor" />
                   <span>No hidden fees</span>
               </li>
               <li className="flex items-center gap-3">
-                  <Star className="h-5 w-5 text-purple-400 shrink-0" fill="currentColor" />
+                  <Star className="h-5 w-5 text-pink-500 shrink-0" fill="currentColor" />
                   <span>Best video quality</span>
               </li>
               <li className="flex items-center gap-3">
-                  <Star className="h-5 w-5 text-purple-400 shrink-0" fill="currentColor" />
+                  <Star className="h-5 w-5 text-pink-500 shrink-0" fill="currentColor" />
                   <span>15 credits for 15 days</span>
               </li>
                <li className="flex items-center gap-3">
-                  <Star className="h-5 w-5 text-purple-400 shrink-0" fill="currentColor" />
+                  <Star className="h-5 w-5 text-pink-500 shrink-0" fill="currentColor" />
                   <span>Billed each 15 days</span>
               </li>
             </ul>
 
-            <Button onClick={handlePurchaseClick} size="lg" className="w-full max-w-xs mx-auto text-lg bg-purple-500 hover:bg-purple-600 text-white shadow-md">
+            {/* Bouton avec le nouveau dégradé de couleur */}
+            <Button onClick={handlePurchaseClick} size="lg" className="w-full max-w-xs mx-auto text-lg text-white font-semibold bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 shadow-md">
               Watch the kiss now
             </Button>
           </div>
