@@ -27,8 +27,6 @@ export default function PricingPage() {
   };
 
   return (
-    // Conteneur principal : aligne en haut sur mobile (justify-start) et au centre sur PC (md:justify-center).
-    // Ajout d'un padding vertical pour l'espacement.
     <main className="flex flex-col items-center justify-start md:justify-center min-h-screen bg-white p-4 py-12 sm:p-6">
       
       <Button variant="ghost" onClick={() => router.back()} className="absolute top-4 left-4 text-slate-600 hover:bg-slate-100 z-10">
@@ -37,19 +35,18 @@ export default function PricingPage() {
       </Button>
 
       <div className="w-full max-w-4xl mx-auto">
-        {/* Grille : 1 colonne sur mobile, 2 sur PC. Espacement vertical réduit sur mobile (gap-y-8) */}
         <div className="grid md:grid-cols-2 gap-y-8 md:gap-x-16 items-center">
           
-          {/* Colonne de gauche: Texte d'accroche. Maintenant aligné à gauche par défaut. */}
           <div className="text-left">
-            <h1 className="text-4xl leading-tight sm:text-5xl md:text-6xl font-extrabold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
+            {/* Changement: font-extrabold remplacé par font-bold pour une meilleure consistance */}
+            <h1 className="text-4xl leading-tight sm:text-5xl md:text-6xl font-bold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
               You're one step away from kissing your crush
             </h1>
           </div>
 
-          {/* Colonne de droite: Offre. Marges et tailles réduites pour mobile. */}
           <div className="w-full flex flex-col items-center">
             <div className="border rounded-2xl p-6 w-full max-w-xs mx-auto flex flex-col items-center text-center shadow-lg bg-slate-50">
+              {/* Le font-bold est déjà ici, on s'assure qu'il est bien appliqué */}
               <p className="text-5xl sm:text-6xl font-bold text-slate-800">0,6$<span className="text-xl sm:text-2xl font-medium text-slate-500">/credit</span></p>
             </div>
 
