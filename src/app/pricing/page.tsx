@@ -31,11 +31,13 @@ export default function PricingPage() {
       <div className="w-full max-w-4xl mx-auto">
         <div className="grid md:grid-cols-2 gap-y-10 md:gap-x-16 items-center">
           
-          {/* Titre : Centré sur mobile (text-center), aligné à gauche sur PC (md:text-left). Graisse forcée à extrabold. */}
-          <div className="text-center md:text-left">
-            <h1 className="text-4xl leading-tight sm:text-5xl md:text-6xl font-extrabold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
-              You're one step away from kissing your crush
-            </h1>
+          {/* FIX: Conteneur pour aligner le titre comme le reste du contenu sur mobile */}
+          <div>
+            <div className="max-w-xs mx-auto md:mx-0 md:max-w-none">
+              <h1 className="text-left text-4xl leading-tight sm:text-5xl md:text-6xl font-extrabold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
+                You're one step away from kissing your crush
+              </h1>
+            </div>
           </div>
 
           {/* Offre : Centrée, assurant un alignement parfait sur mobile */}
