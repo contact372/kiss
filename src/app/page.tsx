@@ -38,6 +38,7 @@ function PageContent() {
   const searchParams = useSearchParams();
   const [appState, setAppState] = useState<AppState>('form');
   const [loadingReason, setLoadingReason] = useState<LoadingReason>('generating');
+  const [isDownloading, setIsDownloading] = useState(false); // <-- NOUVEAU : pour l'indicateur de chargement
   const [image1, setImage1] = useState<string | null>(null);
   const [image2, setImage2] = useState<string | null>(null);
   const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
@@ -188,7 +189,7 @@ function PageContent() {
     if (!restoredImage1 || !restoredImage2) return;
 
     setTimeout(() => {
-        if (userProfile && (userProfile.isSubscribed || userProfile.credits > 0)) {
+        if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) { // Corrected from isSubscribed
             startRealGeneration(restoredImage1, restoredImage2);
         } else {
             handleTeaserFlow();
@@ -292,14 +293,20 @@ function PageContent() {
   const handleGenerate = () => {
     if (!canGenerate) return;
     saveStateToSession();
+
     if (!user) {
         router.push('/login?tab=signup&start_teaser=true');
         return;
     }
-    if (userProfile && (userProfile.isSubscribed || userProfile.credits > 0)) {
+
+    if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) { // Corrected from isSubscribed
         startRealGeneration();
     } else {
-        handleTeaserFlow();
+        toast({
+            variant: 'destructive',
+            title: 'Not Enough Credits',
+            description: 'Please purchase more to generate a new video.',
+        });
     }
   };
 
@@ -312,14 +319,26 @@ function PageContent() {
      setIsSubDialogOpen(true);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!videoUrl) return;
-    const link = document.createElement('a');
-    link.href = videoUrl;
-    link.download = 'eternal-kiss.mp4';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    setIsDownloading(true);
+    try {
+      const response = await fetch(videoUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'eternal-kiss.mp4';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url); // Libère la mémoire
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not download the video.' });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleReset = () => {
@@ -359,8 +378,8 @@ function PageContent() {
   const renderResultState = () => (
      <Card className="w-full overflow-hidden shadow-2xl bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
         <CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Here is your moment of magic.</CardDescription></CardHeader>
-        <CardContent className="p-4 pt-0"><div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">{videoUrl && <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />}</div></CardContent>
-        <CardFooter className="p-4 pt-0 flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Create Another</Button>{videoUrl && <Button onClick={handleDownload} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"><Download className="mr-2 h-4 w-4" />Download Video</Button>}</CardFooter>
+        <CardContent className="p-4 pt-0"><div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">{videoUrl && <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />}</div></flickity-component-1690465228514>
+        <CardFooter className="p-4 pt-0 flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Create Another</Button>{videoUrl && <Button onClick={handleDownload} disabled={isDownloading} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"><Download className="mr-2 h-4 w-4" />{isDownloading ? 'Downloading...' : 'Download Video'}</Button>}</CardFooter>
     </Card>
   );
 
