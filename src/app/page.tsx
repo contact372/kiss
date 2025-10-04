@@ -320,8 +320,10 @@ function PageContent() {
     if (!videoUrl) return;
     setIsDownloading(true);
 
+    // Détecte si l'appareil est un mobile. C'est plus fiable que de juste tester navigator.share.
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     try {
-        // On passe maintenant par notre propre API pour éviter les problèmes de CORS
         const proxyUrl = `/api/download-video?url=${encodeURIComponent(videoUrl)}`;
         const response = await fetch(proxyUrl);
 
@@ -332,13 +334,14 @@ function PageContent() {
         const blob = await response.blob();
         const file = new File([blob], "eternal-kiss.mp4", { type: "video/mp4" });
 
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Si c'est un mobile ET que le partage est possible, on utilise le partage natif.
+        if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
                 title: 'Your Eternal Kiss',
-                text: 'Check out this video I created!',
             });
         } else {
+            // Sinon (sur PC ou comme fallback), on force le téléchargement direct.
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -350,10 +353,10 @@ function PageContent() {
         }
     } catch (error: any) {
         if (error.name === 'AbortError') {
-            console.log('Share action was cancelled.');
+            console.log('Share/Download action was cancelled by the user.');
         } else {
             console.error("Download or share failed:", error);
-            toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not download or share the video.' });
+            toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not download the video.' });
         }
     } finally {
         setIsDownloading(false);
@@ -398,7 +401,7 @@ function PageContent() {
      <Card className="w-full overflow-hidden shadow-2xl bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
         <CardHeader className="text-center p-6"><CardTitle className="text-3xl font-headline bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">Your Kiss is Ready!</CardTitle><CardDescription className="text-muted-foreground">Here is your moment of magic.</CardDescription></CardHeader>
         <CardContent className="p-4 pt-0"><div className="relative rounded-lg overflow-hidden border-4 border-white shadow-lg aspect-video">{videoUrl && <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />}</div></CardContent>
-        <CardFooter className="p-4 pt-0 flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Create Another</Button>{videoUrl && <Button onClick={handleDownload} disabled={isDownloading} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"><Download className="mr-2 h-4 w-4" />{isDownloading ? 'Saving...' : 'Save or Share Video'}</Button>}</CardFooter>
+        <CardFooter className="p-4 pt-0 flex flex-col sm:flex-row gap-3"><Button variant="outline" onClick={handleReset} className="w-full"><ArrowLeft className="mr-2 h-4 w-4" />Create Another</Button>{videoUrl && <Button onClick={handleDownload} disabled={isDownloading} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"><Download className="mr-2 h-4 w-4" />{isDownloading ? 'Downloading...' : 'Download Video'}</Button>}</CardFooter>
     </Card>
   );
 
