@@ -351,7 +351,7 @@ function PageContent() {
                 <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight md:tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
                     Kiss Your Crush With AI
                 </h1>
-                <div className="mt-6 w-full max-w-md aspect-[9/16] md:aspect-video rounded-2xl overflow-hidden shadow-xl">
+                <div className="mt-6 w-full max-w-md aspect-video rounded-2xl overflow-hidden shadow-xl">
                     <video 
                         key="demo-video"
                         src="/demo.mp4" 
