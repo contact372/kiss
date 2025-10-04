@@ -80,11 +80,13 @@ export default function KissGenerator({
 }: KissGeneratorProps) {
 
   return (
-    <div className="w-full flex flex-col items-center gap-4 md:gap-6">
-        {/* Grille pour les uploads d'image */}
-        <div className="grid grid-cols-2 gap-3 w-full max-w-xs md:max-w-sm">
-            <ImageDropzone image={image1} setImage={setImage1} title="Photo of you" />
-            <ImageDropzone image={image2} setImage={setImage2} title="Photo of your crush" />
+    <div className="w-full flex flex-col items-center gap-4 md:gap-6 h-full p-6 bg-white rounded-2xl shadow-lg">
+        <div className="w-full flex-grow flex flex-col justify-center">
+            {/* Grille pour les uploads d'image */}
+            <div className="grid grid-cols-2 gap-3 w-full max-w-xs md:max-w-sm mx-auto">
+                <ImageDropzone image={image1} setImage={setImage1} title="Photo of you" />
+                <ImageDropzone image={image2} setImage={setImage2} title="Photo of your crush" />
+            </div>
         </div>
 
         {/* Bouton de génération */}
@@ -103,4 +105,4 @@ export default function KissGenerator({
         </Button>
     </div>
   );
-}
+} 
