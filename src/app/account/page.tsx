@@ -1,19 +1,14 @@
-
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
-import { checkUserSubscription } from '@/lib/firebase/db';
-import type { UserProfile } from '@/lib/firebase/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
 export default function AccountPage() {
-  const { user, loading: authLoading } = useAuth();
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, userProfile, loading: authLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -22,46 +17,16 @@ export default function AccountPage() {
     }
   }, [user, authLoading, router]);
 
-  useEffect(() => {
-    async function fetchProfile() {
-      if (user) {
-        setLoading(true);
-        const profile = await checkUserSubscription(user.uid);
-        setUserProfile(profile);
-        setLoading(false);
-      }
-    }
-    fetchProfile();
-  }, [user]);
-
   const handleManageSubscription = () => {
-    // Redirects the user to Whop's hub to manage their subscription.
     window.location.href = 'https://whop.com/hub/';
   }
 
-  if (authLoading || loading) {
+  if (authLoading || !userProfile) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
-  }
-
-  if (!user) {
-    // This case should be handled by the redirect effect, but as a fallback:
-    return (
-        <div className="flex h-full items-center justify-center">
-            <p>Redirecting to login...</p>
-        </div>
-    );
-  }
-
-  if (!userProfile) {
-    return (
-        <div className="flex h-full items-center justify-center">
-            <p>Could not load user profile.</p>
-        </div>
-    )
   }
 
   return (
@@ -76,7 +41,7 @@ export default function AccountPage() {
           <CardHeader>
             <CardTitle>Subscription Details</CardTitle>
             <CardDescription>
-              {userProfile.isSubscribed
+              {userProfile.hasPaid
                 ? 'You have an active subscription.'
                 : 'You do not have an active subscription.'}
             </CardDescription>
@@ -90,7 +55,7 @@ export default function AccountPage() {
                 <p className="text-2xl font-bold">{userProfile.credits}</p>
              </div>
              <div className="flex flex-col sm:flex-row gap-2">
-                {userProfile.isSubscribed && (
+                {userProfile.hasPaid && (
                     <Button onClick={handleManageSubscription}>Manage Subscription on Whop</Button>
                 )}
              </div>
