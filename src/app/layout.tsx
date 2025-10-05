@@ -6,8 +6,8 @@ import { AuthProvider } from '@/contexts/auth-context';
 import { AppLayout } from '@/components/app/app-layout';
 
 export const metadata: Metadata = {
-  title: 'Eternal Kiss',
-  description: 'Create a video of you and your loved one kissing.',
+  title: 'Akiss',
+  description: 'Kiss your crush with AI.',
 };
 
 export default function RootLayout({
