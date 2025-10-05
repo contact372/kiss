@@ -1,81 +1,63 @@
+
+import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { activateUserSubscriptionAdmin, cancelUserSubscriptionAdmin } from '@/lib/firebase/firebase-admin';
+import { activateUser, deactivateUser } from '@/lib/firebase/firebase-admin';
 
-export async function POST(request: Request) {
-  const secret = process.env.WHOP_WEBHOOK_SECRET;
-  console.log('[WHOP_WEBHOOK] Received a request.');
+// Errors based on Whop's documentation
+const ERRORS = {
+  NO_SIGNATURE: 'No signature found in the headers',
+  INVALID_SIGNATURE: 'The signature in the headers is not valid',
+  WEBHOOK_SECRET_NOT_SET: 'The WEBHOOK_SECRET is not set in the environment variables',
+};
 
-  if (!secret) {
-    console.error('[WHOP_WEBHOOK_ERROR] WHOP_WEBHOOK_SECRET is not set in environment variables.');
-    return NextResponse.json({ error: 'Webhook secret is not configured.' }, { status: 500 });
-  }
-
-  try {
+/**
+ * This is a webhook that receives POST requests from Whop.
+ * It verifies the signature of the request and then processes the event.
+ * @param req - The Next.js request object.
+ * @returns A Next.js response object.
+ */
+export async function POST(req: NextRequest) {
     const headersList = headers();
-    const signature = headersList.get('x-whop-signature');
-    const body = await request.text();
-    console.log('[WHOP_WEBHOOK] Request Body:', body.substring(0, 500) + '...'); // Log first 500 chars
+    const signature = headersList.get('X-Whop-Signature');
+
+    if (!process.env.WHOP_WEBHOOK_SECRET) {
+        console.error('[Whop Webhook] Webhook secret is not set.');
+        return NextResponse.json({ error: ERRORS.WEBHOOK_SECRET_NOT_SET }, { status: 500 });
+    }
 
     if (!signature) {
-      console.warn('[WHOP_WEBHOOK_WARN] Webhook received without a signature.');
-      return NextResponse.json({ error: 'No signature found in headers.' }, { status: 401 });
-    }
-    console.log('[WHOP_WEBHOOK] Signature from header:', signature);
-
-    const hash = crypto.createHmac('sha256', secret).update(body).digest('hex');
-    console.log('[WHOP_WEBHOOK] Calculated hash:', hash);
-
-    if (!crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature))) {
-      console.warn('[WHOP_WEBHOOK_ERROR] Invalid webhook signature received.');
-      return NextResponse.json({ error: 'Invalid webhook signature.' }, { status: 401 });
-    }
-    console.log('[WHOP_WEBHOOK] Signature is valid.');
-
-    const payload = JSON.parse(body);
-    const eventType = payload.type;
-    const uid = payload.data?.metadata?.uid;
-    console.log(`[WHOP_WEBHOOK] Event Type: ${eventType}, UID from metadata: ${uid}`);
-
-    if (!uid) {
-        console.error(`[WHOP_WEBHOOK_CRITICAL] Webhook (${eventType}) received but UID was missing from metadata.`);
-        return NextResponse.json({ error: 'User UID was missing from webhook metadata.' }, { status: 400 });
+        console.error('[Whop Webhook] No signature found.');
+        return NextResponse.json({ error: ERRORS.NO_SIGNATURE }, { status: 400 });
     }
 
-    switch (eventType) {
-        case 'payment_succeeded':
-        case 'subscription.created':
-        case 'subscription.renewed':
-            console.log(`[WHOP_WEBHOOK] Activating subscription for user: ${uid}...`);
-            await activateUserSubscriptionAdmin(uid);
-            console.log(`[WHOP_WEBHOOK] Successfully activated/renewed subscription for user: ${uid}`);
-            return NextResponse.json({ message: `Subscription activated for user ${uid}.` }, { status: 200 });
-        
-        case 'subscription.ended':
-            const endsAtEnded = payload.data?.ends_at || new Date().toISOString();
-            console.log(`[WHOP_WEBHOOK] Subscription for user ${uid} officially ended at ${endsAtEnded}. Cancelling access.`);
-            await cancelUserSubscriptionAdmin(uid, endsAtEnded, true); // Mark as ended
-            return NextResponse.json({ message: `Subscription for user ${uid} ended.` }, { status: 200 });
+    try {
+        const body = await req.text();
+        const hash = crypto.createHmac('sha256', process.env.WHOP_WEBHOOK_SECRET).update(body).digest('hex');
 
-        case 'subscription.canceled':
-            const endsAtCanceled = payload.data?.ends_at;
-            if (!endsAtCanceled) {
-                console.error(`[WHOP_WEBHOOK_CRITICAL] subscription.canceled webhook for UID ${uid} is missing the 'ends_at' date.`);
-                return NextResponse.json({ error: "Cancellation event is missing the subscription end date." }, { status: 400 });
-            }
-            console.log(`[WHOP_WEBHOOK] Subscription cancellation scheduled for user: ${uid} on ${endsAtCanceled}. Storing end date.`);
-            await cancelUserSubscriptionAdmin(uid, endsAtCanceled, false); // Mark with end date, but not ended yet
-            return NextResponse.json({ message: `Subscription cancellation for user ${uid} acknowledged.` }, { status: 200 });
+        if (hash !== signature) {
+            console.error('[Whop Webhook] Invalid signature.');
+            return NextResponse.json({ error: ERRORS.INVALID_SIGNATURE }, { status: 401 });
+        }
 
-        default:
-            console.log(`[WHOP_WEBHOOK] Received unhandled event type: ${eventType}. Acknowledging.`);
-            return NextResponse.json({ message: `Webhook event ${eventType} received and acknowledged.` }, { status: 200 });
+        const event = JSON.parse(body);
+
+        switch (event.type) {
+            case 'membership.created':
+                await activateUser(event.data.whop_id);
+                break;
+            case 'membership.cancelled':
+                await deactivateUser(event.data.whop_id);
+                break;
+            case 'membership.ended':
+                 await deactivateUser(event.data.whop_id);
+                 break;
+        }
+
+        return NextResponse.json({ status: 'success' }, { status: 200 });
+
+    } catch (err: any) {
+        console.error(`[Whop Webhook] Error processing webhook: ${err.message}`);
+        return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
     }
-
-  } catch (error) {
-    console.error('[WHOP_WEBHOOK_FATAL] Error processing Whop webhook:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: `Webhook processing failed: ${message}` }, { status: 500 });
-  }
 }
