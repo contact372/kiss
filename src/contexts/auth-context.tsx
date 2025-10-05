@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase/firebase';
-import { getUserProfile } from '@/lib/firebase/db';
+import { ensureUserProfile } from '@/lib/firebase/db';
 import type { UserProfile } from '@/lib/firebase/types';
 
 interface AuthContextType {
@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUserProfile = useCallback(async () => {
     if (user) {
-      const profile = await getUserProfile(user.uid);
+      const profile = await ensureUserProfile(user.uid, user.email);
       setUserProfile(profile);
     }
   }, [user]);
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       if (user) {
         setUser(user);
-        const profile = await getUserProfile(user.uid);
+        const profile = await ensureUserProfile(user.uid, user.email);
         setUserProfile(profile);
       } else {
         setUser(null);
