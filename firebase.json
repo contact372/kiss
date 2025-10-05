@@ -13,5 +13,14 @@
       "firebase-debug.log",
       "firebase-debug.*.log"
     ]
+  },
+  "hosting": {
+    "public": ".next",
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
   }
 }
