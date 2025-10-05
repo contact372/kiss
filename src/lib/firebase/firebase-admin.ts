@@ -4,11 +4,23 @@ import * as admin from 'firebase-admin';
 const BUCKET_NAME = process.env.FIREBASE_STORAGE_BUCKET;
 
 if (!admin.apps.length) {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    storageBucket: BUCKET_NAME,
-  });
+  // Only attempt to parse the service account key if it's provided.
+  // This allows the app to build without having the key present.
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: BUCKET_NAME,
+    });
+  } else {
+    // In environments where the key is not available (like the build process),
+    // initialize without credentials. Operations requiring auth will fail at runtime,
+    // but the build will succeed.
+    console.warn('[FIREBASE_ADMIN] Service account key not found. Initializing without credentials for build process.');
+    admin.initializeApp({
+      storageBucket: BUCKET_NAME,
+    });
+  }
 }
 
 const db = admin.firestore();
