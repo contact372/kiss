@@ -323,10 +323,11 @@ function PageContent() {
 
   const renderFormState = () => (
     <div className="w-full max-w-6xl mx-auto px-4">
-        <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-stretch">
+        <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-center">
             <div className="flex flex-col items-center text-center md:items-start md:text-left">
-                <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold leading-tight tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
-                    Kiss Your Crush With AI
+                <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent flex flex-col leading-none">
+                    <span>Kiss Your Crush</span>
+                    <span>With AI</span>
                 </h1>
                 <div className="mt-6 w-full max-w-md aspect-video rounded-2xl overflow-hidden shadow-xl bg-black/5">
                     <video 
@@ -341,7 +342,7 @@ function PageContent() {
                 </div>
             </div>
 
-            <div className="mt-8 md:mt-0 flex items-center">
+            <div className="mt-4 md:mt-0 flex items-center">
                 <KissGenerator 
                     image1={image1}
                     setImage1={setImage1}
