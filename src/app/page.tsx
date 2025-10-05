@@ -36,7 +36,6 @@ function PageContent() {
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
 
-  // ... (toute la logique des fonctions reste la même, je ne la modifie pas) ...
   const saveStateToSession = useCallback(() => {
     try {
         if (image1 && image2) {
@@ -175,7 +174,7 @@ function PageContent() {
     }, 500);
     
     router.replace('/', { scroll: false });
-  }, [user, userProfile, searchParams, restoreStateFromSession, startRealGeneration]);
+  }, [user, userProfile, searchParams, restoreStateFromSession, startRealGeneration, router]);
   
   useEffect(() => {
     const paid = searchParams.get('paid');
@@ -240,7 +239,7 @@ function PageContent() {
     };
     
     handlePostPayment();
-  }, [user, searchParams, handleGenerationResult, refreshUserProfile, restoreStateFromSession, clearSessionState, startLoadingAnimation, toast]);
+  }, [user, searchParams, handleGenerationResult, refreshUserProfile, restoreStateFromSession, clearSessionState, startLoadingAnimation, toast, router]);
 
   useEffect(() => {
     setCanGenerate(!!(image1 && image2));
@@ -327,9 +326,9 @@ function PageContent() {
         <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-stretch">
             <div className="flex flex-col items-center text-center md:items-start md:text-left">
                 <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold leading-tight tracking-tighter bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
-                    Kiss Your Crush<br className="sm:hidden"/> With AI
+                    Kiss Your Crush With AI
                 </h1>
-                <div className="mt-6 w-full max-w-md aspect-video rounded-2xl overflow-hidden shadow-xl">
+                <div className="mt-6 w-full max-w-md aspect-video rounded-2xl overflow-hidden shadow-xl bg-black/5">
                     <video 
                         key={Date.now()} // Force re-render
                         src={`/demo.mp4?t=${Date.now()}`} // Cache-busting
@@ -342,7 +341,7 @@ function PageContent() {
                 </div>
             </div>
 
-            <div className="mt-8 md:mt-0 flex">
+            <div className="mt-8 md:mt-0 flex items-center">
                 <KissGenerator 
                     image1={image1}
                     setImage1={setImage1}
