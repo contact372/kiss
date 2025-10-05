@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -14,11 +13,11 @@ import {
 import { Home, User, Settings, FileText, Shield, LogOut, PanelRight, Video, Crown } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
-import { auth } from '@/lib/firebase/firebase'; // <-- CORRECTED IMPORT
+import { auth } from '@/lib/firebase/firebase';
 import { signOut } from 'firebase/auth';
-import { Logo } from '../icons/logo';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import Image from 'next/image';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, userProfile, loading } = useAuth();
@@ -29,7 +28,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     console.log("Logout button clicked. Attempting to sign out...");
     try {
-      await signOut(auth); // <-- SIMPLIFIED USAGE
+      await signOut(auth);
       console.log("Firebase signOut successful. Redirecting...");
       window.location.href = '/';
     } catch (error) {
@@ -50,8 +49,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
         <header className="p-4 border-b">
           <Link href="/" onClick={handleLinkClick} className="flex items-center gap-2">
-            <Logo className="w-7 h-7 text-primary" />
-            <h1 className="text-xl font-semibold tracking-tighter">Eternal Kiss</h1>
+            <Image src="/logokissgros.png" alt="Akiss Logo" width={28} height={28} />
+            <h1 className="text-xl font-semibold tracking-tighter">Akiss</h1>
           </Link>
         </header>
         <nav className="flex-grow p-4 space-y-2">
@@ -145,8 +144,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-svh flex flex-col">
        <header className="flex h-14 items-center justify-between border-b bg-background px-4 sticky top-0 z-10">
             <Link href="/" className="flex items-center gap-2">
-                 <Logo className="w-6 h-6 text-primary" />
-                 <span className="font-semibold">Eternal Kiss</span>
+                 <Image src="/logo.svg" alt="Akiss Logo" width={24} height={24} />
+                 <span className="font-semibold">Akiss</span>
             </Link>
              <Sheet open={open} onOpenChange={setOpen}>
                 <SheetTrigger asChild>
