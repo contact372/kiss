@@ -144,7 +144,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-svh flex flex-col">
        <header className="flex h-14 items-center justify-between border-b bg-background px-4 sticky top-0 z-10">
             <Link href="/" className="flex items-center gap-2">
-                 <Image src="/logo.svg" alt="Akiss Logo" width={24} height={24} />
+                 <Image src="/logokissgros.png" alt="Akiss Logo" width={24} height={24} />
                  <span className="font-semibold">Akiss</span>
             </Link>
              <Sheet open={open} onOpenChange={setOpen}>
