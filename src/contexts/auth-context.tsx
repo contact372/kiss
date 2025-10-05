@@ -1,10 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, type ReactNode, useCallback } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from '@/lib/firebase/firebase'; 
-import { Loader2 } from 'lucide-react';
-import { ensureUserProfile } from '@/lib/firebase/db';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '@/lib/firebase/firebase';
+import { getUserProfile } from '@/lib/firebase/db';
 import type { UserProfile } from '@/lib/firebase/types';
 
 interface AuthContextType {
@@ -14,30 +13,26 @@ interface AuthContextType {
   refreshUserProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ 
-  user: null, 
-  userProfile: null, 
-  loading: true, 
-  refreshUserProfile: async () => {} 
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshUserProfile = useCallback(async () => {
     if (user) {
-      const profile = await ensureUserProfile(user.uid, user.email);
+      const profile = await getUserProfile(user.uid);
       setUserProfile(profile);
     }
   }, [user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setLoading(true);
       if (user) {
-        const profile = await ensureUserProfile(user.uid, user.email);
         setUser(user);
+        const profile = await getUserProfile(user.uid);
         setUserProfile(profile);
       } else {
         setUser(null);
@@ -48,16 +43,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => unsubscribe();
   }, []);
-  
-  if (loading) {
-    return (
-        <div className="flex items-center justify-center h-screen w-full">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
-    );
+
+  const value = { user, userProfile, loading, refreshUserProfile };
+
+  return (
+      <AuthContext.Provider value={value}>
+        {children}
+      </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-
-  return <AuthContext.Provider value={{ user, userProfile, loading, refreshUserProfile }}>{children}</AuthContext.Provider>;
-};
-
-export const useAuth = () => useContext(AuthContext);
+  return context;
+}
