@@ -3,16 +3,14 @@ import * as admin from 'firebase-admin';
 const BUCKET_NAME = process.env.FIREBASE_STORAGE_BUCKET;
 
 if (!admin.apps.length) {
-  // The build process injects the service account key via the FIREBASE_CONFIG env var.
-  if (process.env.FIREBASE_CONFIG) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG as string);
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       storageBucket: BUCKET_NAME,
     });
   } else {
-    // This fallback is for local development or build steps where the secret is not available.
-    console.warn('[FIREBASE_ADMIN] Service account key not found. Initializing with default credentials.');
+    console.warn('[FIREBASE_ADMIN] Service account key not found. Initializing without credentials for build process.');
     admin.initializeApp({
       storageBucket: BUCKET_NAME,
     });
