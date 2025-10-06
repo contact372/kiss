@@ -1,5 +1,5 @@
 'use server';
-import '@/lib/firebase/firebase-admin';
+import '@lib/firebase/firebase-admin';
 import * as admin from 'firebase-admin';
 import { fuseFaces } from './fuse-faces';
 import { GenerateKissVideoOutput } from './types';
@@ -15,7 +15,6 @@ export async function generateKissVideo(
   const db = admin.firestore();
 
   try {
-    // ... (le reste du code de génération reste identique)
     const storage = admin.storage();
     const fusionResult = await fuseFaces({ image1DataUri, image2DataUri });
     if (fusionResult.error || !fusionResult.fusedImageUri) {
@@ -68,7 +67,7 @@ export async function generateKissVideo(
             }
             
             const userData = userDoc.data();
-            if (userData && !userData.hasPaid && userData.credits > 0) { // Corrected from isSubscribed
+            if (userData && userData.credits > 0) {
                 transaction.update(userRef, { credits: FieldValue.increment(-1) });
                 console.log(`[MAIN_FLOW] Decremented 1 credit for user ${userId}.`);
             }
