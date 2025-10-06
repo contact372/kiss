@@ -1,50 +1,67 @@
 
 # Fichier de configuration pour Firebase App Hosting
-# Combine les paramètres de runtime et les variables d'environnement secrètes.
+# Version améliorée avec le champ "availability" pour chaque secret.
 
-# Configuration du runtime (pour la scalabilité)
 runConfig:
-  # Nombre maximum d'instances que le service peut créer pour gérer le trafic.
-  # La valeur "1" de votre ancien fichier est dangereuse car elle empêche le scaling.
-  # Nous mettons une valeur élevée pour permettre au site de gérer des milliers d'utilisateurs.
   maxInstances: 100
 
-# Variables d'environnement à charger depuis Secret Manager (ESSENTIEL pour que l'app fonctionne)
 env:
-  # Clés pour le paiement via Whop
   - variable: WHOP_WEBHOOK_SECRET
     secret: WHOP_WEBHOOK_SECRET
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # Clés pour la génération de vidéo via Pollo
   - variable: POLLO_API_KEY
     secret: POLLO_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+
   - variable: POLLO_WEBHOOK_SECRET
     secret: POLLO_WEBHOOK_SECRET
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # Clé pour l'API Gemini
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # Clé de configuration Firebase (contient toutes les autres clés Firebase)
   - variable: FIREBASE_CONFIG
     secret: FIREBASE_CONFIG
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # Nom du bucket de stockage pour les vidéos
   - variable: FIREBASE_STORAGE_BUCKET
     secret: FIREBASE_STORAGE_BUCKET
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # URL de base de l'application pour NextAuth
   - variable: NEXT_PUBLIC_APP_URL
     secret: NEXT_PUBLIC_APP_URL
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # Clé secrète pour sécuriser les sessions NextAuth (Très Important !)
   - variable: NEXTAUTH_SECRET
     secret: NEXTAUTH_SECRET
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # ID du sujet Pub/Sub pour la file d'attente de génération (Nécessaire pour la scalabilité)
   - variable: PUBSUB_TOPIC_ID
     secret: PUBSUB_TOPIC_ID
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # Un de vos secrets existants
   - variable: LOG_EXECUTION_ID
     secret: LOG_EXECUTION_ID
+    availability:
+      - BUILD
+      - RUNTIME
