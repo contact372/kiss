@@ -1,5 +1,6 @@
+
 'use server';
-import '@lib/firebase/firebase-admin';
+import '@/lib/firebase/firebase-admin';
 import * as admin from 'firebase-admin';
 import { fuseFaces } from './fuse-faces';
 import { GenerateKissVideoOutput } from './types';
@@ -56,7 +57,6 @@ export async function generateKissVideo(
     await generationDocRef.update({ status: 'processing', externalTaskId });
     console.log(`[MAIN_FLOW] Task submitted. External ID: ${externalTaskId}`);
 
-    // CORRECTED CREDIT DECREMENT
     const userRef = db.collection('users').doc(userId);
     try {
         await db.runTransaction(async (transaction) => {
