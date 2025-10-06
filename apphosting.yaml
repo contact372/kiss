@@ -1,16 +1,16 @@
 
 # Fichier de configuration pour Firebase App Hosting
-# TEST D'ISOLATION : Suppression temporaire de WHOP_WEBHOOK_SECRET pour identifier la source de l'erreur.
+# Version finale et complète.
 
 runConfig:
   maxInstances: 100
 
 env:
-  # - variable: WHOP_WEBHOOK_SECRET  <-- TEMPORAIREMENT EN COMMENTAIRE
-  #   secret: WHOP_WEBHOOK_SECRET
-  #   availability:
-  #     - BUILD
-  #     - RUNTIME
+  - variable: WHOP_WEBHOOK_SECRET
+    secret: WHOP_WEBHOOK_SECRET
+    availability:
+      - BUILD
+      - RUNTIME
 
   - variable: POLLO_API_KEY
     secret: POLLO_API_KEY
