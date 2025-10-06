@@ -36,11 +36,6 @@ env:
     availability:
       - BUILD
       - RUNTIME
-  - variable: NEXTAUTH_SECRET
-    secret: NEXTAUTH_SECRET
-    availability:
-      - BUILD
-      - RUNTIME
   - variable: PUBSUB_TOPIC_ID
     secret: PUBSUB_TOPIC_ID
     availability:
