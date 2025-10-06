@@ -1,2 +1,21 @@
 runConfig:
   maxInstances: 100
+env:
+  - variable: WHOP_WEBHOOK_SECRET
+    secret: WHOP_WEBHOOK_SECRET
+  - variable: POLLO_API_KEY
+    secret: POLLO_API_KEY
+  - variable: POLLO_WEBHOOK_SECRET
+    secret: POLLO_WEBHOOK_SECRET
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+  - variable: FIREBASE_CONFIG
+    secret: FIREBASE_CONFIG
+  - variable: FIREBASE_STORAGE_BUCKET
+    secret: FIREBASE_STORAGE_BUCKET
+  - variable: NEXT_PUBLIC_APP_URL
+    secret: NEXT_PUBLIC_APP_URL
+  - variable: PUBSUB_TOPIC_ID
+    secret: PUBSUB_TOPIC_ID
+  - variable: LOG_EXECUTION_ID
+    secret: LOG_EXECUTION_ID
