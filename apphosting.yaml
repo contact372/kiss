@@ -6,11 +6,11 @@ runConfig:
   maxInstances: 100
 
 env:
-  - variable: WHOP_WEBHOOK_SECRET
-    secret: WHOP_WEBHOOK_SECRET
-    availability:
-      - BUILD
-      - RUNTIME
+  #- variable: WHOP_WEBHOOK_SECRET
+   # secret: WHOP_WEBHOOK_SECRET
+   # availability:
+      #- BUILD
+      #- RUNTIME
 
   - variable: POLLO_API_KEY
     secret: POLLO_API_KEY
