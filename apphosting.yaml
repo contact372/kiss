@@ -4,40 +4,50 @@ env:
   - variable: WHOP_WEBHOOK_SECRET
     secret: WHOP_WEBHOOK_SECRET
     availability:
+      - BUILD
       - RUNTIME
   - variable: POLLO_API_KEY
     secret: POLLO_API_KEY
     availability:
+      - BUILD
       - RUNTIME
   - variable: POLLO_WEBHOOK_SECRET
     secret: POLLO_WEBHOOK_SECRET
     availability:
+      - BUILD
       - RUNTIME
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
     availability:
+      - BUILD
       - RUNTIME
   - variable: FIREBASE_CONFIG
     secret: FIREBASE_CONFIG
     availability:
+      - BUILD
       - RUNTIME
   - variable: FIREBASE_STORAGE_BUCKET
     secret: FIREBASE_STORAGE_BUCKET
     availability:
+      - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_APP_URL
     secret: NEXT_PUBLIC_APP_URL
     availability:
+      - BUILD
       - RUNTIME
   - variable: NEXTAUTH_SECRET
     secret: NEXTAUTH_SECRET
     availability:
+      - BUILD
       - RUNTIME
   - variable: PUBSUB_TOPIC_ID
     secret: PUBSUB_TOPIC_ID
     availability:
+      - BUILD
       - RUNTIME
   - variable: LOG_EXECUTION_ID
     secret: LOG_EXECUTION_ID
     availability:
+      - BUILD
       - RUNTIME
