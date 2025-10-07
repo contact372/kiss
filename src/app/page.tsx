@@ -33,7 +33,6 @@ function PageContent() {
   const [canGenerate, setCanGenerate] = useState(false);
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
-  const [postLoginActionPending, setPostLoginActionPending] = useState(false);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
 
@@ -172,34 +171,40 @@ function PageContent() {
     };
   }, []);
 
-  // *** ROBUST MOBILE FIX ***
-  // Step 1: Detect intent from URL and set a flag. Clean URL immediately.
+  // *** THE WORKING FIX FROM THE OLD VERSION ***
+  // This logic uses a simple timeout to reliably bypass the mobile race condition.
   useEffect(() => {
-    if (searchParams.get('start_teaser') === 'true') {
-      setPostLoginActionPending(true);
-      router.replace('/', { scroll: false });
-    }
-  }, [searchParams, router]);
-
-  // Step 2: Patiently wait for the flag AND for all auth data to be loaded.
-  useEffect(() => {
-    // If the action is not pending, or if we are still waiting for auth data, do nothing.
-    if (!postLoginActionPending || authLoading || !user || !userProfile) {
-      return;
-    }
-
-    // All conditions are met. Execute the action.
+    const startTeaserParam = searchParams.get('start_teaser');
+    // Exit if the user isn't logged in or didn't just come from the login flow.
+    if (startTeaserParam !== 'true' || !user) return;
+    
+    // Restore images from session storage.
     const { restoredImage1, restoredImage2 } = restoreStateFromSession();
-    if (restoredImage1 && restoredImage2) {
-        // A new user is always directed to the teaser flow.
-        toast({ title: "Success! Logged in.", description: "Creating a short teaser for you..." });
-        handleTeaserFlow();
+    if (!restoredImage1 || !restoredImage2) {
+        router.replace('/', { scroll: false }); // Clean URL and exit if no images.
+        return;
     }
 
-    // Action handled. Reset the flag.
-    setPostLoginActionPending(false);
-
-  }, [postLoginActionPending, authLoading, user, userProfile, restoreStateFromSession, handleTeaserFlow, toast]);
+    // The simple but effective timeout. It gives userProfile time to load on mobile.
+    setTimeout(() => {
+        // Now we can safely check the profile.
+        if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) {
+            // This is a paying user, start the real generation.
+            toast({ title: "Welcome back!", description: "Starting your video generation..." });
+            startRealGeneration(restoredImage1, restoredImage2);
+        } else {
+            // This is a new user. Run the fake 8-second teaser flow.
+            toast({ title: "Success! Logged in.", description: "Creating a short teaser for you..." });
+            handleTeaserFlow();
+        }
+    }, 500); // A 500ms delay is enough to solve the race condition.
+    
+    // Clean the URL immediately after scheduling the action.
+    router.replace('/', { scroll: false });
+    
+  // This is the dependency array from the working version, respecting that choice.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, userProfile, searchParams]);
   
   // Handles the flow after a successful payment
   useEffect(() => {
@@ -365,8 +370,8 @@ function PageContent() {
   );
 }
 
-export default function Home() {
-    return (
+    return (export default function Home() {
+
         <Suspense fallback={<div className="flex items-center justify-center h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
             <PageContent />
         </Suspense>
