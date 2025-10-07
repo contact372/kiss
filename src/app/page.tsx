@@ -60,6 +60,7 @@ function PageContent() {
   const clearSessionState = useCallback(() => {
     try {
       sessionStorage.removeItem('preLoginState');
+      sessionStorage.removeItem('postLoginAction');
     } catch (e) { console.error("Failed to clear state", e); }
   }, []);
   
@@ -171,40 +172,31 @@ function PageContent() {
     };
   }, []);
 
-  // *** THE WORKING FIX FROM THE OLD VERSION ***
-  // This logic uses a simple timeout to reliably bypass the mobile race condition.
+  // *** ROBUST POST-LOGIN ACTION HANDLER ***
   useEffect(() => {
-    const startTeaserParam = searchParams.get('start_teaser');
-    // Exit if the user isn't logged in or didn't just come from the login flow.
-    if (startTeaserParam !== 'true' || !user) return;
-    
-    // Restore images from session storage.
-    const { restoredImage1, restoredImage2 } = restoreStateFromSession();
-    if (!restoredImage1 || !restoredImage2) {
-        router.replace('/', { scroll: false }); // Clean URL and exit if no images.
-        return;
-    }
+    // Wait for auth to be resolved
+    if (authLoading) return;
 
-    // The simple but effective timeout. It gives userProfile time to load on mobile.
-    setTimeout(() => {
-        // Now we can safely check the profile.
-        if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) {
-            // This is a paying user, start the real generation.
-            toast({ title: "Welcome back!", description: "Starting your video generation..." });
-            startRealGeneration(restoredImage1, restoredImage2);
-        } else {
-            // This is a new user. Run the fake 8-second teaser flow.
-            toast({ title: "Success! Logged in.", description: "Creating a short teaser for you..." });
-            handleTeaserFlow();
+    const postLoginAction = sessionStorage.getItem('postLoginAction');
+
+    // If a user is logged in AND there's a pending action
+    if (user && postLoginAction === 'start_teaser') {
+        // 1. Clean up immediately
+        sessionStorage.removeItem('postLoginAction');
+
+        // 2. Restore state
+        const { restoredImage1, restoredImage2 } = restoreStateFromSession();
+        if (!restoredImage1 || !restoredImage2) {
+            console.error("Post-login action triggered, but no images found in session storage.");
+            return;
         }
-    }, 500); // A 500ms delay is enough to solve the race condition.
-    
-    // Clean the URL immediately after scheduling the action.
-    router.replace('/', { scroll: false });
-    
-  // This is the dependency array from the working version, respecting that choice.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, userProfile, searchParams]);
+
+        // 3. Execute the teaser flow
+        toast({ title: "Success! Logged in.", description: "Creating a short teaser for you..." });
+        handleTeaserFlow();
+    }
+  // Run when auth state is resolved or user object changes
+  }, [authLoading, user, restoreStateFromSession, handleTeaserFlow, toast]);
   
   // Handles the flow after a successful payment
   useEffect(() => {
@@ -260,10 +252,18 @@ function PageContent() {
 
   const handleGenerate = () => {
     if (!canGenerate) return;
+    
+    // Save images to session storage for both cases
     saveStateToSession();
 
     if (!user) {
-        router.push('/login?tab=signup&start_teaser=true');
+        // Set flag in session storage and redirect
+        try {
+            sessionStorage.setItem('postLoginAction', 'start_teaser');
+        } catch (e) {
+            console.error("Failed to set post-login action", e);
+        }
+        router.push('/login?tab=signup');
         return;
     }
 
