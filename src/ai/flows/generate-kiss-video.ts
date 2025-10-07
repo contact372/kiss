@@ -16,13 +16,11 @@ export async function generateKissVideo(
   const generationDocRef = db.collection('videoGenerations').doc(generationId);
 
   // --- IDEMPOTENCY CHECK ---
-  // This prevents duplicate executions from Pub/Sub retries.
   const generationDoc = await generationDocRef.get();
   if (generationDoc.exists && generationDoc.data()?.status !== 'pending') {
     console.warn(`[IDEMPOTENCY_WARN] Generation ${generationId} already processed (status: ${generationDoc.data()?.status}). Halting.`);
     return { generationId, status: generationDoc.data()?.status };
   }
-  // --- END IDEMPOTENCY CHECK ---
 
   console.log(`[MAIN_FLOW] Starting video generation for id: ${generationId}`);
 
@@ -39,10 +37,11 @@ export async function generateKissVideo(
         throw new Error(`User ${userId} has no credits left.`);
       }
       transaction.update(userRef, { credits: FieldValue.increment(-1) });
-      console.log(`[CREDIT_SUCCESS] Decremented 1 credit for user ${userId}. New balance might be ${currentCredits - 1}.`);
+      console.log(`[CREDIT_SUCCESS] Decremented 1 credit for user ${userId}.`);
     });
 
     // === PROCEED WITH GENERATION ===
+    await generationDocRef.update({ status: 'processing'}); // Set status early
     const storage = admin.storage();
     const fusionResult = await fuseFaces({ image1DataUri, image2DataUri });
     if (fusionResult.error || !fusionResult.fusedImageUri) {
@@ -70,6 +69,40 @@ export async function generateKissVideo(
                 prompt: 'You’ll receive an image with two faces. You have to make the two people in the image kiss passionately, like if this was the first image of a kiss video between two people set next to each other. Do not add anything, no other person. The background of the image you’ll receive is divided in the middle,do not mind it,  and do not change or animate or move the background, only animate the people. The video should be cinematic and ultra realistic like if it was taken by a true camera, 4k, and high quality. Shot with static camera that doesnt move, only the people are moving, the camera is not shaking.',
                 strength: 50,
                 length: 5,
+                mode: 'std',
+            },
+        })
+    };
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Pollo API Error (${response.status}): ${errorText}`);
+    }
+    const data = await response.json();
+    const externalTaskId = data.data.taskId;
+    await generationDocRef.update({ externalTaskId });
+    console.log(`[MAIN_FLOW] Task submitted. External ID: ${externalTaskId}`);
+
+    return { generationId, status: 'processing', sourceImageUri: imageUrl };
+
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+    console.error(`[FATAL_CRASH] Critical error in generation ${generationId}:`, err);
+    
+    if (err instanceof Error && !err.message.includes("credits") && !err.message.includes("User profile")) {
+        const userRef = db.collection('users').doc(userId);
+        await userRef.update({ credits: FieldValue.increment(1) });
+        console.error(`[CREDIT_ROLLBACK] Rolled back 1 credit for user ${userId} due to downstream error.`);
+    }
+
+    await generationDocRef.update({ 
+      status: 'failed', 
+      error: `Fatal crash: ${errorMessage}` 
+    });
+    
+    return { error: `Failed to animate image due to fatal crash: ${errorMessage}` };
+  }
+}
                 mode: 'std',
             },
         })
