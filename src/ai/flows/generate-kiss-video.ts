@@ -12,16 +12,43 @@ export async function generateKissVideo(
   image1DataUri: string,
   image2DataUri: string
 ): Promise<GenerateKissVideoOutput> {
-  console.log('[MAIN_FLOW] Starting video generation...');
   const db = admin.firestore();
+  const generationDocRef = db.collection('videoGenerations').doc(generationId);
+
+  // --- IDEMPOTENCY CHECK ---
+  // This prevents duplicate executions from Pub/Sub retries.
+  const generationDoc = await generationDocRef.get();
+  if (generationDoc.exists && generationDoc.data()?.status !== 'pending') {
+    console.warn(`[IDEMPOTENCY_WARN] Generation ${generationId} already processed (status: ${generationDoc.data()?.status}). Halting.`);
+    return { generationId, status: generationDoc.data()?.status };
+  }
+  // --- END IDEMPOTENCY CHECK ---
+
+  console.log(`[MAIN_FLOW] Starting video generation for id: ${generationId}`);
 
   try {
+    // === CREDIT DEDUCTION FIRST ===
+    const userRef = db.collection('users').doc(userId);
+    await db.runTransaction(async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists) {
+        throw new Error(`User profile ${userId} not found.`);
+      }
+      const currentCredits = userDoc.data()?.credits || 0;
+      if (currentCredits <= 0) {
+        throw new Error(`User ${userId} has no credits left.`);
+      }
+      transaction.update(userRef, { credits: FieldValue.increment(-1) });
+      console.log(`[CREDIT_SUCCESS] Decremented 1 credit for user ${userId}. New balance might be ${currentCredits - 1}.`);
+    });
+
+    // === PROCEED WITH GENERATION ===
     const storage = admin.storage();
     const fusionResult = await fuseFaces({ image1DataUri, image2DataUri });
     if (fusionResult.error || !fusionResult.fusedImageUri) {
       throw new Error(`Image fusion failed: ${fusionResult.error || 'Unknown error'}`);
     }
-    const generationDocRef = db.collection('videoGenerations').doc(generationId);
+    
     const bucket = storage.bucket();
     const fileName = `fused-images/${generationId}.png`;
     const file = bucket.file(fileName);
@@ -57,40 +84,23 @@ export async function generateKissVideo(
     await generationDocRef.update({ status: 'processing', externalTaskId });
     console.log(`[MAIN_FLOW] Task submitted. External ID: ${externalTaskId}`);
 
-    const userRef = db.collection('users').doc(userId);
-    try {
-        await db.runTransaction(async (transaction) => {
-            const userDoc = await transaction.get(userRef);
-            if (!userDoc.exists) {
-                console.error(`[CREDIT_ERROR] User profile ${userId} not found.`);
-                return;
-            }
-            
-            const userData = userDoc.data();
-            if (userData && userData.credits > 0) {
-                transaction.update(userRef, { credits: FieldValue.increment(-1) });
-                console.log(`[MAIN_FLOW] Decremented 1 credit for user ${userId}.`);
-            }
-        });
-    } catch (e) {
-        console.error(`[CREDIT_ERROR] Transaction to decrement credits failed for user ${userId}.`, e);
-    }
-
     return { generationId, status: 'processing', sourceImageUri: imageUrl };
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
     console.error(`[FATAL_CRASH] Critical error in generation ${generationId}:`, err);
     
-    try {
-      const safeDb = admin.firestore();
-      await safeDb.collection('videoGenerations').doc(generationId).update({ 
-        status: 'failed', 
-        error: `Fatal crash: ${errorMessage}` 
-      });
-    } catch (firestoreError) {
-      console.error(`[CATASTROPHIC_FAILURE] Could not write error to Firestore for ${generationId}.`, firestoreError);
+    // Attempt to roll back credit if something failed after deduction
+    if (err instanceof Error && !err.message.includes("credits")) {
+        const userRef = db.collection('users').doc(userId);
+        await userRef.update({ credits: FieldValue.increment(1) });
+        console.error(`[CREDIT_ROLLBACK] Rolled back 1 credit for user ${userId} due to downstream error.`);
     }
+
+    await generationDocRef.update({ 
+      status: 'failed', 
+      error: `Fatal crash: ${errorMessage}` 
+    });
     
     return { error: `Failed to animate image due to fatal crash: ${errorMessage}` };
   }
