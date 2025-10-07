@@ -41,8 +41,6 @@ export async function POST(request: Request) {
     console.log(`[WORKER] Processing for user: ${correctedInput.userId}, generation: ${correctedInput.generationId}`);
 
     // --- AWAIT THE ENTIRE FLOW ---
-    // The worker will now wait for the whole process to finish before responding.
-    // This ensures credits are deducted and the task is submitted.
     const result = await generateKissVideo(
       correctedInput.generationId,
       correctedInput.userId,
@@ -51,9 +49,7 @@ export async function POST(request: Request) {
     );
 
     if (result.error) {
-      // The flow itself handles logging the error, we just need to respond correctly.
       console.error(`[WORKER] Flow completed with an error for generation ${correctedInput.generationId}.`);
-      // Return a success status so Pub/Sub does not retry a failed job.
       return NextResponse.json({ success: false, error: result.error }, { status: 200 });
     }
 
@@ -63,7 +59,6 @@ export async function POST(request: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     console.error(`[WORKER] UNHANDLED FATAL ERROR: ${errorMessage}`);
-    // Return a server error status. Pub/Sub might retry.
     return NextResponse.json({ error: 'Unhandled fatal error', details: errorMessage }, { status: 500 });
   }
 }
