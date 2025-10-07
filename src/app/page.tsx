@@ -33,9 +33,9 @@ function PageContent() {
   const [canGenerate, setCanGenerate] = useState(false);
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
+  const [postLoginActionPending, setPostLoginActionPending] = useState(false);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
-  const postLoginFlowHandled = useRef(false); // Ref to prevent re-runs
 
   const saveStateToSession = useCallback(() => {
     try {
@@ -56,7 +56,7 @@ function PageContent() {
       }
     } catch (e) { console.error("Failed to restore state", e); }
     return { restoredImage1: null, restoredImage2: null };
-  }, []);
+  }, [setImage1, setImage2]);
 
   const clearSessionState = useCallback(() => {
     try {
@@ -172,39 +172,34 @@ function PageContent() {
     };
   }, []);
 
-  // *** MOBILE-FRIENDLY FIX ***: Handles the redirection flow after login/signup
+  // *** ROBUST MOBILE FIX ***
+  // Step 1: Detect intent from URL and set a flag. Clean URL immediately.
   useEffect(() => {
-    const startTeaserParam = searchParams.get('start_teaser');
-    if (startTeaserParam !== 'true' || postLoginFlowHandled.current) {
-        return;
+    if (searchParams.get('start_teaser') === 'true') {
+      setPostLoginActionPending(true);
+      router.replace('/', { scroll: false });
+    }
+  }, [searchParams, router]);
+
+  // Step 2: Patiently wait for the flag AND for all auth data to be loaded.
+  useEffect(() => {
+    // If the action is not pending, or if we are still waiting for auth data, do nothing.
+    if (!postLoginActionPending || authLoading || !user || !userProfile) {
+      return;
     }
 
-    // Conditions are NOT met, wait for the next render. Crucial for mobile.
-    if (authLoading || !user || !userProfile) {
-        return;
-    }
-
-    // --- All conditions are met, execute the logic ONCE ---
-    postLoginFlowHandled.current = true;
-    
+    // All conditions are met. Execute the action.
     const { restoredImage1, restoredImage2 } = restoreStateFromSession();
-
-    if (!restoredImage1 || !restoredImage2) {
-        router.replace('/', { scroll: false });
-        return;
-    }
-
-    if (userProfile.hasPaid || userProfile.credits > 0) {
-        toast({ title: "Welcome back!", description: "Starting your video generation..." });
-        startRealGeneration(restoredImage1, restoredImage2);
-    } else {
+    if (restoredImage1 && restoredImage2) {
+        // A new user is always directed to the teaser flow.
         toast({ title: "Success! Logged in.", description: "Creating a short teaser for you..." });
         handleTeaserFlow();
     }
-    
-    router.replace('/', { scroll: false });
 
-  }, [authLoading, user, userProfile, searchParams, router, clearSessionState, restoreStateFromSession, startRealGeneration, handleTeaserFlow, toast]);
+    // Action handled. Reset the flag.
+    setPostLoginActionPending(false);
+
+  }, [postLoginActionPending, authLoading, user, userProfile, restoreStateFromSession, handleTeaserFlow, toast]);
   
   // Handles the flow after a successful payment
   useEffect(() => {
