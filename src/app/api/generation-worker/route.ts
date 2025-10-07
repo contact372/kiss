@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       );
       console.log('[GENERATION_WORKER_ROUTE] Successfully initiated generateKissVideo flow.');
     } catch (flowError) {
-      console.error('[GENERATION_WORKER_ROUTE] CRITICAL: The 'generateKissVideo' flow threw an error:', flowError);
+      console.error('[GENERATION_WORKER_ROUTE] CRITICAL: The \'generateKissVideo\' flow threw an error:', flowError);
       // We still return 202 so Pub/Sub doesn't retry, but the error is logged.
     }
 
