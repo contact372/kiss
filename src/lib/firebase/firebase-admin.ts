@@ -2,19 +2,12 @@ import * as admin from 'firebase-admin';
 
 const BUCKET_NAME = process.env.FIREBASE_STORAGE_BUCKET;
 
+// Simplified initialization: The Admin SDK will automatically use the permissions
+// of the App Hosting service account when deployed.
 if (!admin.apps.length) {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      storageBucket: BUCKET_NAME,
-    });
-  } else {
-    console.warn('[FIREBASE_ADMIN] Service account key not found. Initializing without credentials for build process.');
-    admin.initializeApp({
-      storageBucket: BUCKET_NAME,
-    });
-  }
+  admin.initializeApp({
+    storageBucket: BUCKET_NAME,
+  });
 }
 
 const db = admin.firestore();
