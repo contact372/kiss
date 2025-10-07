@@ -35,6 +35,7 @@ function PageContent() {
   const { toast } = useToast();
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
+  const postLoginFlowHandled = useRef(false); // Ref to prevent re-runs
 
   const saveStateToSession = useCallback(() => {
     try {
@@ -171,32 +172,29 @@ function PageContent() {
     };
   }, []);
 
-  // *** MAJOR FIX ***: Handles the redirection flow after login/signup
+  // *** MOBILE-FRIENDLY FIX ***: Handles the redirection flow after login/signup
   useEffect(() => {
     const startTeaserParam = searchParams.get('start_teaser');
-    if (startTeaserParam !== 'true') return; // Do nothing if the param isn't there
-
-    // Wait for the authentication process to be fully complete
-    if (authLoading) return;
-
-    // If auth is done and there's no user, clean up and stop.
-    if (!user) {
-        clearSessionState();
-        router.replace('/', { scroll: false });
+    if (startTeaserParam !== 'true' || postLoginFlowHandled.current) {
         return;
     }
 
-    // Auth is complete, we have a user and their profile is loaded.
+    // Conditions are NOT met, wait for the next render. Crucial for mobile.
+    if (authLoading || !user || !userProfile) {
+        return;
+    }
+
+    // --- All conditions are met, execute the logic ONCE ---
+    postLoginFlowHandled.current = true;
+    
     const { restoredImage1, restoredImage2 } = restoreStateFromSession();
 
-    // If for some reason there are no images, just clean up the URL.
     if (!restoredImage1 || !restoredImage2) {
         router.replace('/', { scroll: false });
         return;
     }
 
-    // Decide which flow to start based on user profile
-    if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) {
+    if (userProfile.hasPaid || userProfile.credits > 0) {
         toast({ title: "Welcome back!", description: "Starting your video generation..." });
         startRealGeneration(restoredImage1, restoredImage2);
     } else {
@@ -204,7 +202,6 @@ function PageContent() {
         handleTeaserFlow();
     }
     
-    // Clean up the URL parameter *after* initiating the action.
     router.replace('/', { scroll: false });
 
   }, [authLoading, user, userProfile, searchParams, router, clearSessionState, restoreStateFromSession, startRealGeneration, handleTeaserFlow, toast]);
@@ -234,7 +231,7 @@ function PageContent() {
                 throw new Error(errorData.message || 'Failed to grant paid access.');
             }
 
-            await refreshUserProfile(); // Ensure we get the new `hasPaid` status
+            await refreshUserProfile();
             
             if (!restoredImage1 || !restoredImage2) {
                 toast({ title: 'Account Upgraded!', description: 'Please upload your images again to start.' });
@@ -266,7 +263,6 @@ function PageContent() {
     saveStateToSession();
 
     if (!user) {
-        // Redirect to login, but add a parameter to remember the user's intent.
         router.push('/login?tab=signup&start_teaser=true');
         return;
     }
