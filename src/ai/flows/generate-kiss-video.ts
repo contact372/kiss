@@ -103,38 +103,3 @@ export async function generateKissVideo(
     return { error: `Failed to animate image due to fatal crash: ${errorMessage}` };
   }
 }
-                mode: 'std',
-            },
-        })
-    };
-    const response = await fetch(url, options);
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Pollo API Error (${response.status}): ${errorText}`);
-    }
-    const data = await response.json();
-    const externalTaskId = data.data.taskId;
-    await generationDocRef.update({ status: 'processing', externalTaskId });
-    console.log(`[MAIN_FLOW] Task submitted. External ID: ${externalTaskId}`);
-
-    return { generationId, status: 'processing', sourceImageUri: imageUrl };
-
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-    console.error(`[FATAL_CRASH] Critical error in generation ${generationId}:`, err);
-    
-    // Attempt to roll back credit if something failed after deduction
-    if (err instanceof Error && !err.message.includes("credits")) {
-        const userRef = db.collection('users').doc(userId);
-        await userRef.update({ credits: FieldValue.increment(1) });
-        console.error(`[CREDIT_ROLLBACK] Rolled back 1 credit for user ${userId} due to downstream error.`);
-    }
-
-    await generationDocRef.update({ 
-      status: 'failed', 
-      error: `Fatal crash: ${errorMessage}` 
-    });
-    
-    return { error: `Failed to animate image due to fatal crash: ${errorMessage}` };
-  }
-}
