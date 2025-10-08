@@ -1,4 +1,4 @@
-''''use client';
+'use client';
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
@@ -80,4 +80,4 @@ export default function PricingPage() {
     </main>
   );
 }
-''''
+
