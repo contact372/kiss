@@ -1,4 +1,4 @@
-import type {Metadata} from 'next';
+import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import React from 'react';
@@ -8,12 +8,15 @@ import { AppLayout } from '@/components/app/app-layout';
 export const metadata: Metadata = {
   title: 'Akiss',
   description: 'Kiss your crush with AI.',
+  icons: {
+    icon: '/logokissgros.png',
+  },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
+export default function RootLayout({ 
+  children, 
+}: Readonly<{ 
+  children: React.ReactNode; 
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -24,9 +27,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-            <AppLayout>
-              {children}
-            </AppLayout>
+          <AppLayout>
+            {children}
+          </AppLayout>
           <Toaster />
         </AuthProvider>
       </body>
