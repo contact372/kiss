@@ -36,35 +36,34 @@ function PageContent() {
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
 
-  const saveStateToLocalStorage = useCallback(() => {
+  const saveStateToSession = useCallback(() => {
     try {
         if (image1 && image2) {
-            localStorage.setItem('preLoginState', JSON.stringify({ image1, image2 }));
+            sessionStorage.setItem('preLoginState', JSON.stringify({ image1, image2 }));
         }
-    } catch (e) { console.error("Failed to save state to localStorage", e); }
+    } catch (e) { console.error("Failed to save state", e); }
   }, [image1, image2]);
 
-  const restoreStateFromLocalStorage = useCallback(() => {
+  const restoreStateFromSession = useCallback(() => {
     try {
-      const savedState = localStorage.getItem('preLoginState');
+      const savedState = sessionStorage.getItem('preLoginState');
       if (savedState) {
         const { image1: i1, image2: i2 } = JSON.parse(savedState);
         if (i1) setImage1(i1);
         if (i2) setImage2(i2);
         return { restoredImage1: i1, restoredImage2: i2 };
       }
-    } catch (e) { console.error("Failed to restore state from localStorage", e); }
+    } catch (e) { console.error("Failed to restore state", e); }
     return { restoredImage1: null, restoredImage2: null };
-  }, [setImage1]);
+  }, []);
 
-  const clearLocalStorageState = useCallback(() => {
+  const clearSessionState = useCallback(() => {
     try {
-      localStorage.removeItem('preLoginState');
-      localStorage.removeItem('postLoginAction');
-    } catch (e) { console.error("Failed to clear localStorage state", e); }
+      sessionStorage.removeItem('preLoginState');
+    } catch (e) { console.error("Failed to clear state", e); }
   }, []);
   
-  const startLoadingAnimation = useCallback((reason: LoadingReason = 'generating', duration: number = 69000) => {
+  const startLoadingAnimation = (reason: LoadingReason = 'generating', duration: number = 69000) => {
     setLoadingReason(reason);
     setAppState('loading');
     setProgress(0);
@@ -77,7 +76,7 @@ function PageContent() {
 
     const increment = 100 / (duration / 100);
     progressIntervalRef.current = setInterval(() => setProgress(p => Math.min(p + increment, 99)), 100);
-  }, []);
+  };
 
   const stopLoading = useCallback(() => {
       if (progressIntervalRef.current) {
@@ -130,18 +129,6 @@ function PageContent() {
     }
   }, [stopLoading, toast, refreshUserProfile]);
   
-  const handleTeaserFlow = useCallback(() => {
-    const teaserDuration = 8000;
-    startLoadingAnimation('teaser', teaserDuration);
-
-    const teaserTimeout = setTimeout(() => {
-        stopLoading();
-        setAppState('teaser');
-    }, teaserDuration);
-
-    return () => clearTimeout(teaserTimeout);
-  }, [startLoadingAnimation, stopLoading]);
-
   const startRealGeneration = useCallback(async (img1?: string | null, img2?: string | null) => {
     const finalImage1 = img1 || image1;
     const finalImage2 = img2 || image2;
@@ -152,7 +139,7 @@ function PageContent() {
     }
     
     startLoadingAnimation('generating', 69000);
-    clearLocalStorageState();
+    clearSessionState();
 
     const result = await createKissVideoAction({
         userId: user.uid,
@@ -162,9 +149,8 @@ function PageContent() {
     
     handleGenerationResult(result);
 
-  }, [user, image1, image2, toast, handleGenerationResult, clearLocalStorageState, startLoadingAnimation]);
+  }, [user, image1, image2, toast, handleGenerationResult, clearSessionState, startLoadingAnimation]);
 
-  // Cleanup effect for intervals and listeners
   useEffect(() => {
     return () => {
       if (firestoreUnsubscribeRef.current) firestoreUnsubscribeRef.current();
@@ -172,42 +158,36 @@ function PageContent() {
     };
   }, []);
 
-  // *** ROBUST POST-LOGIN ACTION HANDLER ***
   useEffect(() => {
-    // Wait for auth to be resolved
-    if (authLoading) return;
+    const startTeaserParam = searchParams.get('start_teaser');
+    if (startTeaserParam !== 'true' || !user) return;
+    
+    const { restoredImage1, restoredImage2 } = restoreStateFromSession();
+    if (!restoredImage1 || !restoredImage2) return;
 
-    const postLoginAction = localStorage.getItem('postLoginAction');
-
-    // If a user is logged in AND there's a pending action
-    if (user && postLoginAction === 'start_teaser') {
-        // 1. Clean up immediately
-        localStorage.removeItem('postLoginAction');
-
-        // 2. Restore state
-        const { restoredImage1, restoredImage2 } = restoreStateFromLocalStorage();
-        if (!restoredImage1 || !restoredImage2) {
-            console.error("Post-login action triggered, but no images found in localStorage.");
-            return;
+    setTimeout(() => {
+        if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) {
+            startRealGeneration(restoredImage1, restoredImage2);
+        } else {
+            handleTeaserFlow();
         }
-
-        // 3. Execute the teaser flow
-        toast({ title: "Success! Logged in.", description: "Creating a short teaser for you..." });
-        handleTeaserFlow();
-    }
-  // Run when auth state is resolved or user object changes
-  }, [authLoading, user, restoreStateFromLocalStorage, handleTeaserFlow, toast]);
+    }, 500);
+    
+    router.replace('/', { scroll: false });
+  }, [user, userProfile, searchParams, restoreStateFromSession, startRealGeneration, router]);
   
-  // Handles the flow after a successful payment
   useEffect(() => {
     const paid = searchParams.get('paid');
     if (!user || paid !== 'true') return;
 
     const handlePostPayment = async () => {
-        startLoadingAnimation('configuring', 10000);
+        setLoadingReason('configuring');
+        setAppState('loading');
+        setProgress(0);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         
         try {
-            const { restoredImage1, restoredImage2 } = restoreStateFromLocalStorage();
+            const { restoredImage1, restoredImage2 } = restoreStateFromSession();
             const idToken = await user.getIdToken();
 
             const response = await fetch('/api/grant-access', {
@@ -216,54 +196,73 @@ function PageContent() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${idToken}`,
                 },
+                body: JSON.stringify({}),
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: `Server responded with ${response.status}` }));
+                let errorData;
+                try { errorData = await response.json(); } catch (e) { throw new Error(`Server responded with ${response.status}`); }
                 throw new Error(errorData.message || 'Failed to grant paid access.');
             }
 
             await refreshUserProfile();
+            toast({ variant: 'default', title: 'Account Upgraded!', description: 'Starting video generation...' });
             
             if (!restoredImage1 || !restoredImage2) {
                 toast({ title: 'Account Upgraded!', description: 'Please upload your images again to start.' });
                 setAppState('form');
-            } else {
-                toast({ title: 'Account Upgraded!', description: 'Starting your video generation...' });
-                startRealGeneration(restoredImage1, restoredImage2);
+                clearSessionState();
+                router.replace('/', { scroll: false });
+                return;
             }
+            
+            startLoadingAnimation('configuring', 69000); 
+            clearSessionState();
+        
+            const result = await createKissVideoAction({
+                userId: user.uid,
+                image1DataUri: restoredImage1,
+                image2_data_uri: restoredImage2,
+            });
+
+            handleGenerationResult(result);
 
         } catch (error) {
+            if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
             const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
-            toast({ variant: 'destructive', title: 'Payment Flow Failed', description: message });
+            console.error('[DEBUG] Failed during post-payment flow:', message);
+            toast({ variant: 'destructive', title: 'Flow Failed', description: 'Please contact support.' });
             setAppState('form');
         } finally {
-            clearLocalStorageState();
             router.replace('/', { scroll: false });
         }
     };
     
     handlePostPayment();
-  }, [user, searchParams, refreshUserProfile, restoreStateFromLocalStorage, clearLocalStorageState, startRealGeneration, startLoadingAnimation, toast, router]);
+  }, [user, searchParams, handleGenerationResult, refreshUserProfile, restoreStateFromSession, clearSessionState, startLoadingAnimation, toast, router]);
 
   useEffect(() => {
     setCanGenerate(!!(image1 && image2));
   }, [image1, image2]);
 
+  const handleTeaserFlow = () => {
+    const teaserDuration = 8000;
+    startLoadingAnimation('teaser', teaserDuration);
+
+    const teaserTimeout = setTimeout(() => {
+        stopLoading();
+        setAppState('teaser');
+    }, teaserDuration);
+
+    return () => clearTimeout(teaserTimeout);
+  };
+
   const handleGenerate = () => {
     if (!canGenerate) return;
-    
-    // Save images to local storage for both cases
-    saveStateToLocalStorage();
+    saveStateToSession();
 
     if (!user) {
-        // Set flag in local storage and redirect
-        try {
-            localStorage.setItem('postLoginAction', 'start_teaser');
-        } catch (e) {
-            console.error("Failed to set post-login action in localStorage", e);
-        }
-        router.push('/login?tab=signup');
+        router.push('/login?tab=signup&start_teaser=true');
         return;
     }
 
@@ -282,7 +281,9 @@ function PageContent() {
     try {
         const proxyUrl = `/api/download-video?url=${encodeURIComponent(videoUrl)}`;
         const response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
 
         const blob = await response.blob();
         const file = new File([blob], "eternal-kiss.mp4", { type: "video/mp4" });
@@ -312,7 +313,7 @@ function PageContent() {
   const handleReset = () => {
     setAppState('form');
     setImage1(null); setImage2(null); setSourceImageUrl(null); setVideoUrl(null); setProgress(0); setLoadingReason('generating');
-    clearLocalStorageState();
+    clearSessionState();
     router.replace('/', { scroll: false });
   };
 
