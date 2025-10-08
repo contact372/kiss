@@ -19,8 +19,9 @@ export default function PricingPage() {
         return;
     }
     
+    // CORRECTION : Utilisation de 'customer_email' au lieu de 'email'
     if(user?.email) {
-        checkoutUrl += `&email=${encodeURIComponent(user.email)}`;
+        checkoutUrl += `&customer_email=${encodeURIComponent(user.email)}`;
     }
 
     window.location.href = checkoutUrl;
