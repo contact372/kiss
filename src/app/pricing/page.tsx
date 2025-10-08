@@ -19,12 +19,13 @@ export default function PricingPage() {
         return;
     }
     
-    // CORRECTION : Retour au paramètre 'email' correct, comme vous l'avez indiqué.
     if(user?.email) {
         checkoutUrl += `&email=${encodeURIComponent(user.email)}`;
     }
 
-    window.location.href = checkoutUrl;
+    // VÉRIFICATION : Affiche l'URL dans une alerte au lieu de rediriger.
+    alert(checkoutUrl);
+    // window.location.href = checkoutUrl;
   };
 
   return (
