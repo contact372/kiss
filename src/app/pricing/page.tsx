@@ -2,29 +2,35 @@
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Star } from "lucide-react";
 
 export default function PricingPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handlePurchaseClick = () => {
-    // URL de base Whop
     let checkoutUrl = 'https://whop.com/checkout/plan_ZtUQy2ebvc8Gc?d2c=true';
     
-    // Si l'utilisateur n'est pas connecté, on le redirige vers l'inscription
-    if (!user) {
+    // Priorité à l'email passé dans l'URL. C'est la correction clé.
+    const emailFromUrl = searchParams.get('email');
+    
+    // Si l'utilisateur n'est pas encore chargé mais qu'on a l'email, on peut continuer
+    if (!user && !emailFromUrl) {
         router.push('/login?tab=signup&redirect=/pricing');
         return;
     }
 
-    // On ajoute le UID pour le suivi via webhook
-    checkoutUrl += `&metadata[uid]=${user.uid}`;
+    // On ajoute le UID pour le suivi, si l'utilisateur est chargé
+    if (user?.uid) {
+        checkoutUrl += `&metadata[uid]=${user.uid}`;
+    }
 
-    // On ajoute l'email pour le pré-remplissage. C'est le paramètre standard.
-    if (user.email) {
-      checkoutUrl += `&email=${encodeURIComponent(user.email)}`;
+    // On ajoute l'email (de l'URL ou de l'utilisateur) pour le pré-remplissage
+    const finalEmail = emailFromUrl || user?.email;
+    if (finalEmail) {
+      checkoutUrl += `&email=${encodeURIComponent(finalEmail)}`;
     }
 
     // Redirection finale vers la page de paiement
