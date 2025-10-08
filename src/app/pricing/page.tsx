@@ -1,4 +1,4 @@
-'use client';
+''''use client';
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
@@ -19,11 +19,12 @@ export default function PricingPage() {
         return;
     }
     
+    // CORRECTION DÉFINITIVE : Utilisation de 'customer_email'
     if(user?.email) {
-        checkoutUrl += `&email=${encodeURIComponent(user.email)}`;
+        checkoutUrl += `&customer_email=${encodeURIComponent(user.email)}`;
     }
 
-    // VÉRIFICATION : Affiche l'URL dans une alerte au lieu de rediriger.
+    // VÉRIFICATION : L'alerte est maintenue pour le test.
     alert(checkoutUrl);
     // window.location.href = checkoutUrl;
   };
@@ -79,3 +80,4 @@ export default function PricingPage() {
     </main>
   );
 }
+''''
