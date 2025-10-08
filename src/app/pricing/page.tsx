@@ -19,9 +19,10 @@ export default function PricingPage() {
         return;
     }
     
-    // CORRECTION DÉFINITIVE : Utilisation de 'customer_email'
+    // NOUVELLE HYPOTHÈSE : Formatage basé sur la documentation de l'embed
     if(user?.email) {
-        checkoutUrl += `&customer_email=${encodeURIComponent(user.email)}`;
+        const prefillObject = { email: user.email };
+        checkoutUrl += `&prefill=${encodeURIComponent(JSON.stringify(prefillObject))}`;
     }
 
     // VÉRIFICATION : L'alerte est maintenue pour le test.
@@ -80,4 +81,3 @@ export default function PricingPage() {
     </main>
   );
 }
-
