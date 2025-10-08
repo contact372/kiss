@@ -35,32 +35,33 @@ function PageContent() {
   const { toast } = useToast();
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
+  const postPaymentProcessed = useRef(false); // Verrou pour le post-paiement
 
-  const saveStateToSession = useCallback(() => {
+  const saveStateToLocalStorage = useCallback(() => {
     try {
         if (image1 && image2) {
-            sessionStorage.setItem('preLoginState', JSON.stringify({ image1, image2 }));
+            localStorage.setItem('preLoginState', JSON.stringify({ image1, image2 }));
         }
-    } catch (e) { console.error("Failed to save state", e); }
+    } catch (e) { console.error("Failed to save state to localStorage", e); }
   }, [image1, image2]);
 
-  const restoreStateFromSession = useCallback(() => {
+  const restoreStateFromLocalStorage = useCallback(() => {
     try {
-      const savedState = sessionStorage.getItem('preLoginState');
+      const savedState = localStorage.getItem('preLoginState');
       if (savedState) {
         const { image1: i1, image2: i2 } = JSON.parse(savedState);
         if (i1) setImage1(i1);
         if (i2) setImage2(i2);
         return { restoredImage1: i1, restoredImage2: i2 };
       }
-    } catch (e) { console.error("Failed to restore state", e); }
+    } catch (e) { console.error("Failed to restore state from localStorage", e); }
     return { restoredImage1: null, restoredImage2: null };
   }, []);
 
-  const clearSessionState = useCallback(() => {
+  const clearLocalStorage = useCallback(() => {
     try {
-      sessionStorage.removeItem('preLoginState');
-    } catch (e) { console.error("Failed to clear state", e); }
+      localStorage.removeItem('preLoginState');
+    } catch (e) { console.error("Failed to clear state from localStorage", e); }
   }, []);
   
   const startLoadingAnimation = (reason: LoadingReason = 'generating', duration: number = 69000) => {
@@ -91,6 +92,7 @@ function PageContent() {
         stopLoading();
         setAppState('form');
         toast({ variant: 'destructive', title: 'Video Generation Failed', description: result.error, duration: 9000 });
+        clearLocalStorage();
         return;
     }
 
@@ -108,6 +110,7 @@ function PageContent() {
                     setAppState('form');
                     toast({ variant: 'destructive', title: 'Generation Failed', description: data.error || 'The AI failed to process the video.' });
                     if (firestoreUnsubscribeRef.current) firestoreUnsubscribeRef.current();
+                    clearLocalStorage();
                     return;
                 }
 
@@ -117,17 +120,19 @@ function PageContent() {
                     setAppState('result');
                     if (firestoreUnsubscribeRef.current) firestoreUnsubscribeRef.current();
                     refreshUserProfile();
+                    clearLocalStorage();
                 }
             }
         }, (error) => {
             stopLoading();
             setAppState('form');
             toast({ variant: 'destructive', title: 'Error', description: 'Could not listen for video updates.'});
+            clearLocalStorage();
         });
 
         firestoreUnsubscribeRef.current = unsub;
     }
-  }, [stopLoading, toast, refreshUserProfile]);
+  }, [stopLoading, toast, refreshUserProfile, clearLocalStorage]);
   
   const startRealGeneration = useCallback(async (img1?: string | null, img2?: string | null) => {
     const finalImage1 = img1 || image1;
@@ -139,17 +144,17 @@ function PageContent() {
     }
     
     startLoadingAnimation('generating', 69000);
-    clearSessionState();
-
+    
     const result = await createKissVideoAction({
         userId: user.uid,
         image1DataUri: finalImage1,
         image2_data_uri: finalImage2,
     });
     
+    clearLocalStorage();
     handleGenerationResult(result);
 
-  }, [user, image1, image2, toast, handleGenerationResult, clearSessionState, startLoadingAnimation]);
+  }, [user, image1, image2, toast, handleGenerationResult, clearLocalStorage, startLoadingAnimation]);
 
   useEffect(() => {
     return () => {
@@ -162,7 +167,7 @@ function PageContent() {
     const startTeaserParam = searchParams.get('start_teaser');
     if (startTeaserParam !== 'true' || !user) return;
     
-    const { restoredImage1, restoredImage2 } = restoreStateFromSession();
+    const { restoredImage1, restoredImage2 } = restoreStateFromLocalStorage();
     if (!restoredImage1 || !restoredImage2) return;
 
     setTimeout(() => {
@@ -174,20 +179,29 @@ function PageContent() {
     }, 500);
     
     router.replace('/', { scroll: false });
-  }, [user, userProfile, searchParams, restoreStateFromSession, startRealGeneration, router]);
+  }, [user, userProfile, searchParams, restoreStateFromLocalStorage, startRealGeneration, router]);
   
   useEffect(() => {
     const paid = searchParams.get('paid');
-    if (!user || paid !== 'true') return;
+    if (!user || paid !== 'true' || postPaymentProcessed.current) return;
 
+    postPaymentProcessed.current = true; // Verrouillage immédiat
+    
     const handlePostPayment = async () => {
-        setLoadingReason('configuring');
-        setAppState('loading');
-        setProgress(0);
-        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+        // Affiche l'écran de chargement IMMÉDIATEMENT
+        startLoadingAnimation('configuring', 70000);
         
         try {
-            const { restoredImage1, restoredImage2 } = restoreStateFromSession();
+            const { restoredImage1, restoredImage2 } = restoreStateFromLocalStorage();
+
+            if (!restoredImage1 || !restoredImage2) {
+                toast({ title: 'Account Upgraded!', description: 'Please upload your images again to start.' });
+                setAppState('form');
+                clearLocalStorage();
+                router.replace('/', { scroll: false });
+                return;
+            }
+            
             const idToken = await user.getIdToken();
 
             const response = await fetch('/api/grant-access', {
@@ -206,40 +220,31 @@ function PageContent() {
             }
 
             await refreshUserProfile();
-            toast({ variant: 'default', title: 'Account Upgraded!', description: 'Starting video generation...' });
             
-            if (!restoredImage1 || !restoredImage2) {
-                toast({ title: 'Account Upgraded!', description: 'Please upload your images again to start.' });
-                setAppState('form');
-                clearSessionState();
-                router.replace('/', { scroll: false });
-                return;
-            }
-            
-            startLoadingAnimation('configuring', 69000); 
-            clearSessionState();
-        
+            // La génération est lancée EN ARRIÈRE-PLAN de l'écran de chargement.
             const result = await createKissVideoAction({
                 userId: user.uid,
                 image1DataUri: restoredImage1,
                 image2_data_uri: restoredImage2,
             });
-
+            
+            // On passe le résultat à la fonction qui écoute les changements Firestore.
             handleGenerationResult(result);
 
         } catch (error) {
-            if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+            stopLoading();
             const message = error instanceof Error ? error.message : 'An unexpected error occurred.';
             console.error('[DEBUG] Failed during post-payment flow:', message);
             toast({ variant: 'destructive', title: 'Flow Failed', description: 'Please contact support.' });
             setAppState('form');
+            clearLocalStorage();
         } finally {
             router.replace('/', { scroll: false });
         }
     };
     
     handlePostPayment();
-  }, [user, searchParams, handleGenerationResult, refreshUserProfile, restoreStateFromSession, clearSessionState, startLoadingAnimation, toast, router]);
+  }, [user, searchParams, handleGenerationResult, refreshUserProfile, restoreStateFromLocalStorage, clearLocalStorage, startLoadingAnimation, stopLoading, toast, router]);
 
   useEffect(() => {
     setCanGenerate(!!(image1 && image2));
@@ -259,7 +264,7 @@ function PageContent() {
 
   const handleGenerate = () => {
     if (!canGenerate) return;
-    saveStateToSession();
+    saveStateToLocalStorage();
 
     if (!user) {
         router.push('/login?tab=signup&start_teaser=true');
@@ -313,7 +318,7 @@ function PageContent() {
   const handleReset = () => {
     setAppState('form');
     setImage1(null); setImage2(null); setSourceImageUrl(null); setVideoUrl(null); setProgress(0); setLoadingReason('generating');
-    clearSessionState();
+    clearLocalStorage();
     router.replace('/', { scroll: false });
   };
 
