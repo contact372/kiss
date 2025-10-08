@@ -3,10 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
 
 // --- Configuration du Firebase Admin SDK ---
-// On vérifie si l'app a déjà été initialisée pour éviter les erreurs.
 if (!admin.apps.length) {
-  // Lorsqu'on est sur Google Cloud (Cloud Run), appeler initializeApp() sans argument
-  // permet au SDK de découvrir automatiquement la configuration du projet depuis l'environnement.
   admin.initializeApp();
 }
 
@@ -29,28 +26,18 @@ export async function POST(req: NextRequest) {
     // 3. Mettre à jour (ou créer) le document de l'utilisateur dans Firestore.
     const userRef = admin.firestore().collection("users").doc(uid);
     
-    await admin.firestore().runTransaction(async (transaction) => {
-      const userDoc = await transaction.get(userRef);
-      const currentCredits = userDoc.data()?.credits || 0;
-      const newCredits = currentCredits + 15;
-
-      // LA CORRECTION CLÉ EST ICI :
-      // On utilise .set() avec { merge: true } au lieu de .update().
-      // Cela crée le document s'il n'existe pas, et le met à jour s'il existe.
-      // C'est ce qu'on appelle un "upsert".
-      transaction.set(userRef, {
+    // On définit les crédits à 15 au lieu de les incrémenter.
+    await userRef.set({
         hasPaid: true,
-        credits: newCredits,
+        credits: 15,
       }, { merge: true });
-    });
 
     // 4. Renvoyer une réponse de succès.
-    return NextResponse.json({ success: true, message: 'User credits updated successfully.' }, { status: 200 });
+    return NextResponse.json({ success: true, message: 'User credits set to 15 successfully.' }, { status: 200 });
 
   } catch (error: any) {
     console.error('--- ERROR IN /api/grant-access ---', error);
     
-    // Correction de la gestion d'erreur : on vérifie que error.code est bien une chaîne.
     if (typeof error.code === 'string' && error.code.startsWith('auth/')) {
       return NextResponse.json({ success: false, message: `Forbidden: Invalid authentication token. (Reason: ${error.message})` }, { status: 403 });
     }
