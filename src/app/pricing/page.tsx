@@ -3,37 +3,34 @@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Star } from "lucide-react";
+import { Star, Loader2 } from "lucide-react";
+import { Suspense } from 'react';
 
-export default function PricingPage() {
+// Le contenu de la page est déplacé dans son propre composant
+function PricingContent() {
   const { user } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams(); // Ce hook nécessite Suspense
 
   const handlePurchaseClick = () => {
     let checkoutUrl = 'https://whop.com/checkout/plan_ZtUQy2ebvc8Gc?d2c=true';
     
-    // Priorité à l'email passé dans l'URL. C'est la correction clé.
     const emailFromUrl = searchParams.get('email');
     
-    // Si l'utilisateur n'est pas encore chargé mais qu'on a l'email, on peut continuer
     if (!user && !emailFromUrl) {
         router.push('/login?tab=signup&redirect=/pricing');
         return;
     }
 
-    // On ajoute le UID pour le suivi, si l'utilisateur est chargé
     if (user?.uid) {
         checkoutUrl += `&metadata[uid]=${user.uid}`;
     }
 
-    // On ajoute l'email (de l'URL ou de l'utilisateur) pour le pré-remplissage
     const finalEmail = emailFromUrl || user?.email;
     if (finalEmail) {
       checkoutUrl += `&email=${encodeURIComponent(finalEmail)}`;
     }
 
-    // Redirection finale vers la page de paiement
     window.location.href = checkoutUrl;
   };
 
@@ -82,5 +79,14 @@ export default function PricingPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+// Le composant exporté par défaut enveloppe maintenant le contenu avec Suspense
+export default function PricingPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen"><Loader2 className="h-12 w-12 animate-spin text-pink-500" /></div>}>
+      <PricingContent />
+    </Suspense>
   );
 }
