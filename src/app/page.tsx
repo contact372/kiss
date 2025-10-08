@@ -12,8 +12,6 @@ import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase/firebase';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import KissGenerator from '@/components/app/KissGenerator';
-import { logger } from '@/lib/logger';
-import VisualLogger from '@/components/app/VisualLogger';
 
 // Types
 type AppState = 'form' | 'loading' | 'result' | 'teaser';
@@ -38,44 +36,35 @@ function PageContent() {
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const firestoreUnsubscribeRef = useRef<Unsubscribe | null>(null);
 
-  const saveStateToSession = useCallback(() => {
-    logger.info('[saveStateToSession] Attempting to save images...');
+  const saveStateToLocalStorage = useCallback(() => {
     try {
         if (image1 && image2) {
-            sessionStorage.setItem('preLoginState', JSON.stringify({ image1, image2 }));
-            logger.success('[saveStateToSession] Images saved successfully.');
-        } else {
-            logger.warn('[saveStateToSession] One or both images are missing, not saving.');
+            localStorage.setItem('preLoginState', JSON.stringify({ image1, image2 }));
         }
-    } catch (e) { logger.error("[saveStateToSession] Failed to save state", e); }
+    } catch (e) { console.error("Failed to save state to localStorage", e); }
   }, [image1, image2]);
 
-  const restoreStateFromSession = useCallback(() => {
-    logger.info('[restoreStateFromSession] Attempting to restore...');
+  const restoreStateFromLocalStorage = useCallback(() => {
     try {
-      const savedState = sessionStorage.getItem('preLoginState');
+      const savedState = localStorage.getItem('preLoginState');
       if (savedState) {
         const { image1: i1, image2: i2 } = JSON.parse(savedState);
         if (i1) setImage1(i1);
         if (i2) setImage2(i2);
-        logger.success('[restoreStateFromSession] State restored.', { hasI1: !!i1, hasI2: !!i2 });
         return { restoredImage1: i1, restoredImage2: i2 };
       }
-    } catch (e) { logger.error("[restoreStateFromSession] Failed to restore state", e); }
-    logger.warn('[restoreStateFromSession] No state found to restore.');
+    } catch (e) { console.error("Failed to restore state from localStorage", e); }
     return { restoredImage1: null, restoredImage2: null };
   }, [setImage1]);
 
-  const clearSessionState = useCallback(() => {
-    logger.info('[clearSessionState] Clearing session state.');
+  const clearLocalStorageState = useCallback(() => {
     try {
-      sessionStorage.removeItem('preLoginState');
-      sessionStorage.removeItem('postLoginAction');
-    } catch (e) { logger.error("[clearSessionState] Failed to clear state", e); }
+      localStorage.removeItem('preLoginState');
+      localStorage.removeItem('postLoginAction');
+    } catch (e) { console.error("Failed to clear localStorage state", e); }
   }, []);
   
   const startLoadingAnimation = useCallback((reason: LoadingReason = 'generating', duration: number = 69000) => {
-    logger.info(`[startLoadingAnimation] Reason: ${reason}`);
     setLoadingReason(reason);
     setAppState('loading');
     setProgress(0);
@@ -91,7 +80,6 @@ function PageContent() {
   }, []);
 
   const stopLoading = useCallback(() => {
-      logger.info('[stopLoading] Stopping loading animation.');
       if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
@@ -100,7 +88,6 @@ function PageContent() {
   }, []);
 
   const handleGenerationResult = useCallback((result: CreateKissVideoActionOutput) => {
-    logger.info('[handleGenerationResult]', result);
     if (result.error) {
         stopLoading();
         setAppState('form');
@@ -114,7 +101,6 @@ function PageContent() {
         }
 
         const unsub = onSnapshot(doc(db, "videoGenerations", result.generationId), (docSnap) => {
-            logger.info('[onSnapshot] Firestore snapshot received.', docSnap.data());
             if (docSnap.exists()) {
                 const data = docSnap.data();
 
@@ -145,7 +131,6 @@ function PageContent() {
   }, [stopLoading, toast, refreshUserProfile]);
   
   const handleTeaserFlow = useCallback(() => {
-    logger.info('[handleTeaserFlow] Starting teaser flow.');
     const teaserDuration = 8000;
     startLoadingAnimation('teaser', teaserDuration);
 
@@ -158,18 +143,16 @@ function PageContent() {
   }, [startLoadingAnimation, stopLoading]);
 
   const startRealGeneration = useCallback(async (img1?: string | null, img2?: string | null) => {
-    logger.info('[startRealGeneration] Starting real generation.');
     const finalImage1 = img1 || image1;
     const finalImage2 = img2 || image2;
     
     if (!finalImage1 || !finalImage2 || !user) {
-        logger.error('[startRealGeneration] Missing data.', { hasImg1: !!finalImage1, hasImg2: !!finalImage2, hasUser: !!user });
         toast({ variant: 'destructive', title: 'Error', description: 'Missing data to start generation.' });
         return;
     }
     
     startLoadingAnimation('generating', 69000);
-    clearSessionState();
+    clearLocalStorageState();
 
     const result = await createKissVideoAction({
         userId: user.uid,
@@ -179,7 +162,7 @@ function PageContent() {
     
     handleGenerationResult(result);
 
-  }, [user, image1, image2, toast, handleGenerationResult, clearSessionState, startLoadingAnimation]);
+  }, [user, image1, image2, toast, handleGenerationResult, clearLocalStorageState, startLoadingAnimation]);
 
   // Cleanup effect for intervals and listeners
   useEffect(() => {
@@ -191,34 +174,40 @@ function PageContent() {
 
   // *** ROBUST POST-LOGIN ACTION HANDLER ***
   useEffect(() => {
-    logger.info('[PostLoginEffect] Running... ', { authLoading, user: !!user });
-    if (authLoading) { logger.info('[PostLoginEffect] Auth loading. Exit.'); return; }
-    const postLoginAction = sessionStorage.getItem('postLoginAction');
-    logger.info(`[PostLoginEffect] Action: ${postLoginAction}`);
+    // Wait for auth to be resolved
+    if (authLoading) return;
+
+    const postLoginAction = localStorage.getItem('postLoginAction');
+
+    // If a user is logged in AND there's a pending action
     if (user && postLoginAction === 'start_teaser') {
-        logger.success('[PostLoginEffect] Conditions met! Running action.');
-        sessionStorage.removeItem('postLoginAction');
-        const { restoredImage1, restoredImage2 } = restoreStateFromSession();
+        // 1. Clean up immediately
+        localStorage.removeItem('postLoginAction');
+
+        // 2. Restore state
+        const { restoredImage1, restoredImage2 } = restoreStateFromLocalStorage();
         if (!restoredImage1 || !restoredImage2) {
-            logger.error("[PostLoginEffect] No images in session storage.");
+            console.error("Post-login action triggered, but no images found in localStorage.");
             return;
         }
+
+        // 3. Execute the teaser flow
         toast({ title: "Success! Logged in.", description: "Creating a short teaser for you..." });
         handleTeaserFlow();
     }
-  }, [authLoading, user, restoreStateFromSession, handleTeaserFlow, toast]);
+  // Run when auth state is resolved or user object changes
+  }, [authLoading, user, restoreStateFromLocalStorage, handleTeaserFlow, toast]);
   
   // Handles the flow after a successful payment
   useEffect(() => {
     const paid = searchParams.get('paid');
     if (!user || paid !== 'true') return;
 
-    logger.info('[PaymentEffect] Post-payment flow triggered.');
     const handlePostPayment = async () => {
         startLoadingAnimation('configuring', 10000);
         
         try {
-            const { restoredImage1, restoredImage2 } = restoreStateFromSession();
+            const { restoredImage1, restoredImage2 } = restoreStateFromLocalStorage();
             const idToken = await user.getIdToken();
 
             const response = await fetch('/api/grant-access', {
@@ -249,41 +238,38 @@ function PageContent() {
             toast({ variant: 'destructive', title: 'Payment Flow Failed', description: message });
             setAppState('form');
         } finally {
-            clearSessionState();
+            clearLocalStorageState();
             router.replace('/', { scroll: false });
         }
     };
     
     handlePostPayment();
-  }, [user, searchParams, refreshUserProfile, restoreStateFromSession, clearSessionState, startRealGeneration, startLoadingAnimation, toast, router]);
+  }, [user, searchParams, refreshUserProfile, restoreStateFromLocalStorage, clearLocalStorageState, startRealGeneration, startLoadingAnimation, toast, router]);
 
   useEffect(() => {
     setCanGenerate(!!(image1 && image2));
   }, [image1, image2]);
 
   const handleGenerate = () => {
-    logger.info('[handleGenerate] Clicked.');
-    if (!canGenerate) { logger.warn('[handleGenerate] Abort: Images missing.'); return; }
+    if (!canGenerate) return;
     
-    saveStateToSession();
+    // Save images to local storage for both cases
+    saveStateToLocalStorage();
 
     if (!user) {
-        logger.info('[handleGenerate] User not logged in. Setting action and redirecting...');
+        // Set flag in local storage and redirect
         try {
-            sessionStorage.setItem('postLoginAction', 'start_teaser');
-            logger.success('[handleGenerate] postLoginAction successfully set.');
+            localStorage.setItem('postLoginAction', 'start_teaser');
         } catch (e) {
-            logger.error("[handleGenerate] Failed to set action", e);
+            console.error("Failed to set post-login action in localStorage", e);
         }
         router.push('/login?tab=signup');
         return;
     }
 
     if (userProfile && (userProfile.hasPaid || userProfile.credits > 0)) {
-        logger.info('[handleGenerate] Paid user. Starting real generation.');
         startRealGeneration();
     } else {
-        logger.info('[handleGenerate] Free user. Starting teaser flow.');
         handleTeaserFlow();
     }
   };
@@ -291,7 +277,6 @@ function PageContent() {
   const handleDownload = async () => {
      if (!videoUrl) return;
     setIsDownloading(true);
-    logger.info('[handleDownload] Starting download.');
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     try {
@@ -304,7 +289,6 @@ function PageContent() {
 
         if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({ files: [file], title: 'Your Eternal Kiss' });
-             logger.success('[handleDownload] Shared successfully on mobile.');
         } else {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -314,11 +298,10 @@ function PageContent() {
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-            logger.success('[handleDownload] Downloaded successfully on desktop.');
         }
     } catch (error: any) {
         if (error.name !== 'AbortError') {
-            logger.error('[handleDownload] Download or share failed.', error);
+            console.error("Download or share failed:", error);
             toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not download the video.' });
         }
     } finally {
@@ -327,10 +310,9 @@ function PageContent() {
   }
 
   const handleReset = () => {
-    logger.info('[handleReset] Resetting application state.');
     setAppState('form');
     setImage1(null); setImage2(null); setSourceImageUrl(null); setVideoUrl(null); setProgress(0); setLoadingReason('generating');
-    clearSessionState();
+    clearLocalStorageState();
     router.replace('/', { scroll: false });
   };
 
@@ -380,7 +362,6 @@ function PageContent() {
 
   return (
     <main className="flex-grow flex items-center justify-center p-4">
-        <VisualLogger />
         {appState === 'form' && renderFormState()}
         {appState === 'loading' && <div className="w-full max-w-xl mx-auto">{renderLoadingState()}</div>}
         {appState === 'result' && <div className="w-full max-w-xl mx-auto">{renderResultState()}</div>}
