@@ -19,9 +19,9 @@ export default function PricingPage() {
         return;
     }
     
-    // CORRECTION : Utilisation de 'customer_email' au lieu de 'email'
+    // CORRECTION : Retour au paramètre 'email' correct, comme vous l'avez indiqué.
     if(user?.email) {
-        checkoutUrl += `&customer_email=${encodeURIComponent(user.email)}`;
+        checkoutUrl += `&email=${encodeURIComponent(user.email)}`;
     }
 
     window.location.href = checkoutUrl;
