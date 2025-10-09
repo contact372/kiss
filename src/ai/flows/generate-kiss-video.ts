@@ -25,22 +25,10 @@ export async function generateKissVideo(
   console.log(`[MAIN_FLOW] Starting video generation for id: ${generationId}`);
 
   try {
-    // === CREDIT DEDUCTION FIRST ===
-    const userRef = db.collection('users').doc(userId);
-    await db.runTransaction(async (transaction) => {
-      const userDoc = await transaction.get(userRef);
-      if (!userDoc.exists) {
-        throw new Error(`User profile ${userId} not found.`);
-      }
-      const currentCredits = userDoc.data()?.credits || 0;
-      if (currentCredits <= 0) {
-        throw new Error(`User ${userId} has no credits left.`);
-      }
-      transaction.update(userRef, { credits: FieldValue.increment(-1) });
-      console.log(`[CREDIT_SUCCESS] Decremented 1 credit for user ${userId}.`);
-    });
-
     // === PROCEED WITH GENERATION ===
+    // Credit deduction is now handled upstream in the initial server action.
+    // The redundant credit deduction logic has been removed from this file.
+
     await generationDocRef.update({ status: 'processing'}); // Set status early
     const storage = admin.storage();
     const fusionResult = await fuseFaces({ image1DataUri, image2DataUri });
@@ -89,11 +77,7 @@ export async function generateKissVideo(
     const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
     console.error(`[FATAL_CRASH] Critical error in generation ${generationId}:`, err);
     
-    if (err instanceof Error && !err.message.includes("credits") && !err.message.includes("User profile")) {
-        const userRef = db.collection('users').doc(userId);
-        await userRef.update({ credits: FieldValue.increment(1) });
-        console.error(`[CREDIT_ROLLBACK] Rolled back 1 credit for user ${userId} due to downstream error.`);
-    }
+    // Credit rollback logic removed as credit is no longer deducted here.
 
     await generationDocRef.update({ 
       status: 'failed', 
