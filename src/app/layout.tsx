@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import React from 'react';
 import { AuthProvider } from '@/contexts/auth-context';
 import { AppLayout } from '@/components/app/app-layout';
+import { FirebaseAnalytics } from '@/components/app/firebase-analytics'; // Importer le nouveau composant
 
 export const metadata: Metadata = {
   title: 'Akiss',
@@ -27,6 +28,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
+          <FirebaseAnalytics /> {/* Ajouter le composant Analytics ici */}
           <AppLayout>
             {children}
           </AppLayout>
