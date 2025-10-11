@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import React from 'react';
+import React, { Suspense } from 'react'; // Importer Suspense
 import { AuthProvider } from '@/contexts/auth-context';
 import { AppLayout } from '@/components/app/app-layout';
-import { FirebaseAnalytics } from '@/components/app/firebase-analytics'; // Importer le nouveau composant
+import { FirebaseAnalytics } from '@/components/app/firebase-analytics';
 
 export const metadata: Metadata = {
   title: 'Akiss',
-  description: 'Kiss your crush with AI.',
+  description: 'Create a video of you and your loved one kissing.',
   icons: {
     icon: '/logokissgros.png',
   },
@@ -28,7 +28,10 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-          <FirebaseAnalytics /> {/* Ajouter le composant Analytics ici */}
+          {/* Envelopper le composant Analytics dans une Suspense Boundary */}
+          <Suspense fallback={null}>
+            <FirebaseAnalytics />
+          </Suspense>
           <AppLayout>
             {children}
           </AppLayout>
