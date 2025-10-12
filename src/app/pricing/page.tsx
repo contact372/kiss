@@ -13,7 +13,7 @@ function PricingContent() {
   const searchParams = useSearchParams(); // Ce hook nécessite Suspense
 
   const handlePurchaseClick = () => {
-    let checkoutUrl = 'https://whop.com/checkout/plan_ZtUQy2ebvc8Gc?d2c=true';
+    let checkoutUrl = 'https://whop.com/checkout/plan_IXSEJM78BRWfg?d2c=true';
     
     const emailFromUrl = searchParams.get('email');
     
