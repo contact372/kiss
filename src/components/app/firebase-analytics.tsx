@@ -2,29 +2,17 @@
 
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { getAnalytics, logEvent, isSupported, Analytics } from "firebase/analytics";
-import { app } from "@/lib/firebase/firebase";
-
-// --- SOLUTION ---
-// On initialise Analytics une seule fois et on le stocke dans une variable.
-// On s'assure que ce code ne s'exécute que côté client.
-let analytics: Analytics | null = null;
-if (typeof window !== 'undefined') {
-  isSupported().then((supported) => {
-    if (supported) {
-      analytics = getAnalytics(app);
-      console.log("[Analytics] Service initialized.");
-    }
-  });
-}
-// --- FIN SOLUTION ---
+// 1. On importe l'instance déjà initialisée, et plus les outils d'initialisation.
+import { analytics } from "@/lib/firebase/firebase"; 
+import { logEvent } from "firebase/analytics";
 
 export function FirebaseAnalytics() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // L'effet utilise maintenant l'instance d'Analytics déjà prête.
+    // 2. Le composant n'a plus qu'une seule responsabilité : logger les page_view.
+    // Il n'y a plus de logique d'initialisation ici.
     if (analytics) {
       const url = pathname + searchParams.toString();
 
@@ -33,7 +21,7 @@ export function FirebaseAnalytics() {
         page_location: window.location.href,
       });
 
-      console.log(`[Analytics] Logged page_view for: ${url}`);
+      console.log(`[Analytics Component] Logged page_view for: ${url}`);
     }
   }, [pathname, searchParams]);
 
