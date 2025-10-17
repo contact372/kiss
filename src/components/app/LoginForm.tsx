@@ -2,8 +2,16 @@
 
 import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, type UserCredential } from 'firebase/auth';
-import { auth } from '@/lib/firebase/firebase'; 
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  type UserCredential,
+  getAdditionalUserInfo // <- Importer pour détecter les nouveaux utilisateurs
+} from 'firebase/auth';
+import { auth, analytics } from '@/lib/firebase/firebase'; // <- Importer l'instance Analytics
+import { logEvent } from 'firebase/analytics'; // <- Importer la fonction pour logger les événements
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +53,19 @@ export function LoginForm() {
   const handleSuccessfulAuth = async (userCredential: UserCredential) => {
     const user = userCredential.user;
    
+    // --- SOLUTION FINALE : DÉCLENCHEMENT MANUEL ---
+    if (analytics) {
+      const additionalUserInfo = getAdditionalUserInfo(userCredential);
+      // On vérifie si l'utilisateur est bien nouveau
+      if (additionalUserInfo?.isNewUser) {
+        // On envoie l'événement manuellement
+        logEvent(analytics, 'sign_up', {
+          method: additionalUserInfo.providerId || 'password' // 'password' ou 'google.com'
+        });
+      }
+    }
+    // --- FIN DE LA SOLUTION ---
+
     await ensureUserProfile(user.uid, user.email);
    
     toast({ title: 'Success!', description: 'Redirecting...' });
